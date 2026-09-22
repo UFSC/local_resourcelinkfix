@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!--
+  Arquivo de exemplo: uma pagina de navegacao como as que o plugin trata,
+  com um caso de cada regra. Os dominios sao ficticios (RFC 2606).
+
+  Cenario: o backup foi feito em https://origem.example.org, curso 42, e
+  restaurado em https://destino.example.net, curso 77.
+
+  Mapa de cmids deste restore de exemplo:
+      101 -> 201    (veio no backup)
+      102 -> 202    (veio no backup)
+      103 -> 0      (nao foi restaurado por completo)
+-->
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <title>Navegacao do curso</title>
+</head>
+<body>
+
+<h1>Links reescritos</h1>
+<ul>
+    <!-- Relativo: o id vem do mapa. 101 -> 201. -->
+    <li><a href="../../mod/page/view.php?id=101">Unidade 1</a></li>
+
+    <!-- Absoluto do site de ORIGEM: host e id trocados juntos.
+         https://origem.example.org/... 102 -> https://destino.example.net/... 202 -->
+    <li><a href="https://origem.example.org/mod/quiz/view.php?id=102">Questionario</a></li>
+
+    <!-- O proprio curso: 42 -> 77. -->
+    <li><a href="https://origem.example.org/course/view.php?id=42">Pagina inicial</a></li>
+
+    <!-- index.php de um modulo recebe o id do CURSO, nao um cmid: 42 -> 77. -->
+    <li><a href="../../mod/forum/index.php?id=42">Todos os foruns</a></li>
+</ul>
+
+<h1>Links preservados, e por que</h1>
+<ul>
+    <!-- Atividade que NAO veio no backup (newitemid = 0). O host antigo e
+         mantido de proposito: o link segue valido no site de origem, em vez
+         de apontar para o destino com um id que la e outra atividade. -->
+    <li><a href="https://origem.example.org/mod/chat/view.php?id=103">Bate-papo (fora do backup)</a></li>
+
+    <!-- TERCEIRO site: nem host nem id sao tocados. Aquele id pertence a ele. -->
+    <li><a href="https://terceiro.example.com/mod/page/view.php?id=102">Material de outro Moodle</a></li>
+
+    <!-- Terceiro site, link de curso: idem. -->
+    <li><a href="https://terceiro.example.com/course/view.php?id=42">Curso em outro Moodle</a></li>
+
+    <!-- Script fora do padrao (nao e view.php nem index.php). -->
+    <li><a href="https://terceiro.example.com/mod/glossary/showentry.php?courseid=1&amp;eid=15">Verbete</a></li>
+
+    <!-- O id nao e o primeiro parametro: limitacao conhecida, passa intacto. -->
+    <li><a href="../../mod/page/view.php?forceview=1&amp;id=101">Unidade 1 (forma nao suportada)</a></li>
+
+    <!-- Nao e link de atividade nem de curso. -->
+    <li><a href="https://origem.example.org/pluginfile.php/123/mod_resource/content/0/anexo.pdf">Anexo</a></li>
+
+    <!-- Curso diferente do curso de origem: fica como esta. -->
+    <li><a href="https://origem.example.org/course/view.php?id=99">Outro curso</a></li>
+</ul>
+
+<!--
+  Nao coberto por desenho: links dentro de .js e .css. Se a navegacao do curso
+  for montada por JavaScript, os links dela nao sao reescritos.
+-->
+<script src="./js/navegacao.js"></script>
+
+</body>
+</html>

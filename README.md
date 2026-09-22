@@ -28,7 +28,7 @@ um cmid já reescrito não é remapeado.
 ### Link de um terceiro site não é tocado
 
 Se o link absoluto aponta para um host que **não** é o `original_wwwroot`
-(por exemplo `https://presencial.moodle.ufsc.br/mod/page/view.php?id=123`),
+(por exemplo `https://terceiro.example.com/mod/page/view.php?id=123`),
 nem o host nem o id são alterados: aquele id pertence ao outro site, e
 remapeá-lo faria o link abrir **outra atividade** lá. Sem `original_wwwroot`
 no backup, nenhum link absoluto é tocado — só os relativos.
@@ -81,6 +81,12 @@ ela marcada e leia o log do restore.
 Copiar a pasta para `local/resourcelinkfix` e rodar a atualização em
 *Administração do site > Notificações*.
 
+## Exemplo
+
+O arquivo [`example/navigation.html`](example/navigation.html) traz uma página de navegação com
+um caso de cada regra — os reescritos e os preservados, cada um com o comentário do porquê.
+Serve de referência e de material para reproduzir os cenários abaixo.
+
 ## Cenários verificados no Moodle 3.0.5
 
 - [x] Restaurar como curso novo (`TARGET_NEW_COURSE`)
@@ -96,6 +102,11 @@ Copiar a pasta para `local/resourcelinkfix` e rodar a atualização em
 - [x] Backup sem `original_wwwroot`: links absolutos intactos
 - [x] Desativado: nenhum arquivo é tocado
 - [x] Modo simulação: registra a contagem no log e não grava
+
+Os cenários acima foram exercitados com **material de exemplo** construído para cobrir cada
+regra, por `backup_controller`/`restore_controller` em um Moodle 3.0.5. Eles demonstram o
+mecanismo; **não** substituem uma medição de cobertura sobre o HTML real de uma instalação, que
+depende do formato dos links que cada equipe escreve — ver *Limitações*.
 - [x] Arquivo não-HTML na mesma área (`.js`) permanece inalterado
 - [x] `sortorder` preservado (o arquivo principal continua sendo o principal)
 
