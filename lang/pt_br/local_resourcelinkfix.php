@@ -45,3 +45,8 @@ em um curso real antes de ligar a reescrita.';
 
 $string['logrewritten'] = 'local_resourcelinkfix: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) reescrito(s)';
 $string['logdryrun'] = 'local_resourcelinkfix [SIMULAÇÃO]: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) seriam reescritos';
+$string['errorpcre'] = 'O motor de expressões regulares desistiu deste arquivo (erro PCRE {$a}); o arquivo não foi alterado.';
+
+$string['errorcontentlost'] = 'Perda de conteúdo evitada em {$a->file} (cmid {$a->cmid}): a reescrita alterou mais do que os'
+    . ' links ({$a->oldsize} bytes antes, {$a->newsize} depois). O arquivo não foi alterado; as duas'
+    . ' versões seguem no log.';

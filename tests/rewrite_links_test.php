@@ -193,6 +193,50 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
     }
 
     /**
+     * Moodle instalado em subpasta: https://site/moodle.
+     *
+     * O host so era reconhecido quando o dominio vinha colado em /mod/ ou
+     * /course/. Com subpasta, a URL era lida como caminho relativo e o id
+     * de um terceiro site acabava remapeado.
+     */
+    public function test_host_com_subpasta_e_reconhecido() {
+        $plugin = new local_resourcelinkfix_testable_plugin();
+        $plugin->set_restore_state(array(
+            'cmmap' => array(101 => 201),
+            'oldcourseid' => 42, 'newcourseid' => 77,
+            'oldwwwroot' => 'https://origem.example.org/moodle',
+            'newwwwroot' => 'https://destino.example.net/ead',
+        ));
+        // Site de origem: host e id trocados juntos.
+        $this->assertSame('https://destino.example.net/ead/mod/page/view.php?id=201',
+            $plugin->rewrite('https://origem.example.org/moodle/mod/page/view.php?id=101'));
+        // Terceiro site com subpasta: nada muda.
+        $this->assertSame('https://outro.example.com/moodle/mod/page/view.php?id=101',
+            $plugin->rewrite('https://outro.example.com/moodle/mod/page/view.php?id=101'));
+        // Subpasta de dois niveis.
+        $this->assertSame('https://outro.example.com/lms/moodle/mod/page/view.php?id=101',
+            $plugin->rewrite('https://outro.example.com/lms/moodle/mod/page/view.php?id=101'));
+    }
+
+    /**
+     * Host com porta nao padrao.
+     */
+    public function test_host_com_porta_e_reconhecido() {
+        $plugin = new local_resourcelinkfix_testable_plugin();
+        $plugin->set_restore_state(array(
+            'cmmap' => array(101 => 201),
+            'oldcourseid' => 42, 'newcourseid' => 77,
+            'oldwwwroot' => 'http://origem.example.org:8080',
+            'newwwwroot' => self::DESTINO,
+        ));
+        $this->assertSame(self::DESTINO . '/mod/page/view.php?id=201',
+            $plugin->rewrite('http://origem.example.org:8080/mod/page/view.php?id=101'));
+        // Terceiro site com porta: intacto.
+        $this->assertSame('http://outro.example.com:8080/mod/page/view.php?id=101',
+            $plugin->rewrite('http://outro.example.com:8080/mod/page/view.php?id=101'));
+    }
+
+    /**
      * Texto solto antes de um caminho relativo nao pode virar host.
      */
     public function test_texto_antes_do_caminho_nao_vira_host() {
@@ -226,6 +270,23 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
         $js = "const links = { \"Questoes\": '" . self::ORIGEM . "/mod/quiz/view.php?id=101' };";
         $esperado = "const links = { \"Questoes\": '" . self::DESTINO . "/mod/quiz/view.php?id=201' };";
         $this->assertSame($esperado, $plugin->rewrite($js));
+    }
+
+    /**
+     * URL dentro de url(), sintaxe CSS embutida em .js.
+     *
+     * Forma encontrada em material real: o parentese nao separa o host do
+     * caminho, entao o link e reconhecido como qualquer outro.
+     */
+    public function test_url_em_sintaxe_css_e_reescrita() {
+        $plugin = $this->plugin(true);
+        $this->assertSame(
+            'background: url(' . self::DESTINO . '/mod/resource/view.php?id=201);',
+            $plugin->rewrite('background: url(' . self::ORIGEM . '/mod/resource/view.php?id=101);'));
+        // De um terceiro site, continua intacta.
+        $this->assertSame(
+            'background: url(' . self::TERCEIRO . '/mod/resource/view.php?id=101);',
+            $plugin->rewrite('background: url(' . self::TERCEIRO . '/mod/resource/view.php?id=101);'));
     }
 
     /**
@@ -288,6 +349,46 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
             $plugin->rewrite(self::ORIGEM . '/mod/page/view.php?id=101'));
         $this->assertSame('../../mod/page/view.php?id=201',
             $plugin->rewrite('../../mod/page/view.php?id=101'));
+    }
+
+    /**
+     * A trava aceita a troca legitima: so os links mudaram.
+     */
+    public function test_trava_aceita_mudanca_so_nos_links() {
+        $plugin = $this->plugin();
+        $old = '<p>Texto</p><a href="../../mod/page/view.php?id=101">A</a><p>Fim</p>';
+        $new = '<p>Texto</p><a href="../../mod/page/view.php?id=201">A</a><p>Fim</p>';
+        $this->assertTrue($plugin->only_links_differ($old, $new));
+    }
+
+    /**
+     * A trava barra perda de conteudo em volta do link.
+     */
+    public function test_trava_barra_perda_de_texto() {
+        $plugin = $this->plugin();
+        $old = '<p>Texto</p><a href="../../mod/page/view.php?id=101">A</a><p>Fim</p>';
+        $casos = array(
+            'texto sumiu'   => '<a href="../../mod/page/view.php?id=201">A</a><p>Fim</p>',
+            'fim sumiu'     => '<p>Texto</p><a href="../../mod/page/view.php?id=201">A</a>',
+            'tudo vazio'    => '',
+            'so o link'     => '../../mod/page/view.php?id=201',
+            'texto trocado' => '<p>Outro</p><a href="../../mod/page/view.php?id=201">A</a><p>Fim</p>',
+        );
+        foreach ($casos as $nome => $new) {
+            $this->assertFalse($plugin->only_links_differ($old, $new),
+                'deveria barrar: ' . $nome);
+        }
+    }
+
+    /**
+     * A trava barra link que aparece ou desaparece.
+     */
+    public function test_trava_barra_link_a_mais_ou_a_menos() {
+        $plugin = $this->plugin();
+        $old = '<a href="../../mod/page/view.php?id=101">A</a>';
+        $this->assertFalse($plugin->only_links_differ($old,
+            '<a href="../../mod/page/view.php?id=201">A</a><a href="../../mod/page/view.php?id=202">B</a>'));
+        $this->assertFalse($plugin->only_links_differ($old, '<a href="">A</a>'));
     }
 
     /**

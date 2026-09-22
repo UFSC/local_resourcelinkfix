@@ -90,4 +90,15 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
     public function get_linkcount() {
         return $this->linkcount;
     }
+
+    /**
+     * A trava: o conteudo novo difere do antigo apenas nos links?
+     *
+     * @param string $old
+     * @param string $new
+     * @return bool
+     */
+    public function only_links_differ($old, $new) {
+        return $this->only_links_changed($old, $new);
+    }
 }

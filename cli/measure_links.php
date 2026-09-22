@@ -57,7 +57,7 @@ Opcoes:
 Exemplos:
   php local/resourcelinkfix/cli/measure_links.php
   php local/resourcelinkfix/cli/measure_links.php --js
-  php local/resourcelinkfix/cli/measure_links.php --course=42 --js -e 10
+  php local/resourcelinkfix/cli/measure_links.php --course=42 --js --examples=10
 ";
     exit(0);
 }
@@ -137,7 +137,11 @@ function local_resourcelinkfix_line($label, $value, $total) {
     printf("  %-42s %7d%s\n", $label, $value, $pct);
 }
 
-$seen = array();
+// Um controle de hashes por fase: HTML e .js sao contados separadamente.
+// Compartilhar o mesmo array faria um .js de conteudo identico ao de algum
+// .html ser pulado, subestimando a contagem de arquivos.
+$seenhtml = array();
+$seenjs = array();
 $missing = 0;
 
 cli_heading('Recursos analisados' . ($courseid ? " (curso {$courseid})" : ' (site inteiro)'));
@@ -147,20 +151,30 @@ $htmlrecords = array_merge(
     local_resourcelinkfix_fetch_files('%.html', $courseid),
     local_resourcelinkfix_fetch_files('%.htm', $courseid)
 );
-$htmlfiles = local_resourcelinkfix_read_contents($htmlrecords, $seen, $missing);
+$htmlfiles = local_resourcelinkfix_read_contents($htmlrecords, $seenhtml, $missing);
 
-$stats = array('total' => 0, 'covered' => 0, 'idnotfirst' => 0, 'otherscript' => 0);
+$stats = array('total' => 0, 'covered' => 0, 'otherhost' => 0,
+    'idnotfirst' => 0, 'otherscript' => 0);
 $scripts = array();
 $hosts = array();
 $escaped = array();
 $withlinks = 0;
 
 foreach ($htmlfiles as $content) {
-    if (!preg_match_all('~(?:href|src)\s*=\s*["\']([^"\']+)["\']~i', $content, $attrs)) {
+    // O plugin reescreve o arquivo inteiro, nao so os atributos: link em
+    // script inline, em onclick, em url() de CSS ou em texto corrido conta
+    // igual. Medir so href/src reportaria menos do que sera alterado.
+    // O prefixo e ancorado e limitado de proposito. Um '[^\s]*' guloso na
+    // frente faz backtracking quadratico quando o arquivo tem uma sequencia
+    // longa sem espaco - imagem embutida em base64, por exemplo: medido em
+    // 10,5 s para 30 KB, contra 1,3 ms nesta forma.
+    if (!preg_match_all('~(?:https?://[^\s"\'<>()]{0,200})?(?:/|^|(?<=[\s"\'>(]))'
+            . '(?:mod/[a-z0-9_]+/[a-z0-9_]+|course/view|user/view)\.php\?[^"\'\s>)]{0,400}~i',
+            $content, $found_urls)) {
         continue;
     }
     $found = false;
-    foreach ($attrs[1] as $url) {
+    foreach ($found_urls[0] as $url) {
         if (!preg_match($anylink, $url, $parts)) {
             continue;
         }
@@ -172,8 +186,22 @@ foreach ($htmlfiles as $content) {
             ? strtolower($h[1]) : '(relativo)';
         $hosts[$host] = isset($hosts[$host]) ? $hosts[$host] + 1 : 1;
 
-        if (preg_match($pattern, $url)) {
-            $stats['covered']++;
+        if (preg_match($pattern, $url, $hit)) {
+            // Casar o padrao nao basta: link absoluto de outro site e
+            // deliberadamente preservado pelo plugin. Contar como coberto
+            // inflaria o percentual com o que nunca sera reescrito.
+            $linkhost = isset($hit[1]) ? preg_replace('/[ \t]+|-[ \t]+/', '', rtrim($hit[1], '/')) : '';
+            if ($linkhost === '' || strcasecmp($linkhost, rtrim($CFG->wwwroot, '/')) === 0) {
+                $stats['covered']++;
+            } else {
+                $stats['otherhost']++;
+                if (!isset($escaped['host de outro site'])) {
+                    $escaped['host de outro site'] = array();
+                }
+                if (count($escaped['host de outro site']) < $maxexamples) {
+                    $escaped['host de outro site'][] = $url;
+                }
+            }
             continue;
         }
         if (preg_match('~(^|&|&amp;)id=\d+~i', $parts[2])) {
@@ -201,6 +229,7 @@ echo "\n";
 cli_heading('Links em HTML');
 local_resourcelinkfix_line('total', $stats['total'], 0);
 local_resourcelinkfix_line('alcancados pelo plugin', $stats['covered'], $stats['total']);
+local_resourcelinkfix_line('preservados: host de outro site', $stats['otherhost'], $stats['total']);
 local_resourcelinkfix_line('escapam: id fora da 1a posicao', $stats['idnotfirst'], $stats['total']);
 local_resourcelinkfix_line('escapam: script fora do padrao', $stats['otherscript'], $stats['total']);
 
@@ -235,7 +264,7 @@ if ($withjs) {
     cli_heading('Arquivos .js');
 
     $jsrecords = local_resourcelinkfix_fetch_files('%.js', $courseid);
-    $jsfiles = local_resourcelinkfix_read_contents($jsrecords, $seen, $missing);
+    $jsfiles = local_resourcelinkfix_read_contents($jsrecords, $seenjs, $missing);
 
     // Literal: a URL inteira, com id numerico, entre aspas.
     $literal = '~["\'][^"\']*(?:mod/[a-z0-9_]+/(?:view|index|complete)|course/view)\.php\?id=\d+[^"\']*["\']~i';

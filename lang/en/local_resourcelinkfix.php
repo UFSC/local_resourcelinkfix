@@ -45,3 +45,8 @@ impact on a real course before enabling the rewrite.';
 
 $string['logrewritten'] = 'local_resourcelinkfix: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) rewritten';
 $string['logdryrun'] = 'local_resourcelinkfix [SIMULATION]: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) would be rewritten';
+$string['errorpcre'] = 'The regular expression engine gave up on this file (PCRE error {$a}); the file was left untouched.';
+
+$string['errorcontentlost'] = 'Content loss prevented in {$a->file} (cmid {$a->cmid}): the rewrite changed more than the links'
+    . ' ({$a->oldsize} bytes before, {$a->newsize} after). The file was left untouched; both versions'
+    . ' follow in the log.';

@@ -142,53 +142,42 @@ Use-a **antes** de ligar a opção `.js`: ela diz de antemão o que vai ser toca
 
 ### Medição em uma instalação real
 
-Números levantados em uma instalação Moodle 3.0 de porte médio, lendo o conteúdo dos arquivos
-(não apenas os registros da tabela `files`):
+Números de uma instalação Moodle 3.0 de porte médio, lendo o conteúdo dos arquivos (não apenas os
+registros da tabela `files`) e varrendo o arquivo inteiro, como o plugin faz:
 
 | | |
 |---|---|
 | Arquivos HTML distintos em `mod_resource` | 4.968 |
-| Links de atividade em `href`/`src` | 13.245 |
-| Cobertos pelo regex | **13.227 (99,9%)** |
+| Deles, com algum link | 2.100 (42,3%) |
+| Links de atividade encontrados | 14.628 |
+| — destes, apontam para **outro** Moodle | 156 |
+| **Links no escopo do plugin** | **14.472** |
+| Reescritos | **14.458 (99,90%)** |
 | Com `id` fora da primeira posição | **0** |
-| Fora do padrão (`player.php?a=`, `edit.php?d=`) | 9 |
+| Fora do padrão (`edit.php?d=`, `user/view.php?course=`) | 14 (0,10%) |
+| | |
 | Arquivos `.js` distintos | 2.214 |
-| Deles, com link de atividade | 264 |
+| Deles, com link de atividade | 264 (11,9%) |
 | Links dentro de `.js` | 1.833 |
-| Desses, URL literal (alcançável) | **1.827 (99,7%)** |
+| URL literal, alcançável | **1.827 (99,7%)** |
 | Montados em tempo de execução | **0** |
 
-Com a opção `.js` ligada, a cobertura passa de 88% para cerca de 99,8% dos links daquele acervo.
-Os números valem para **aquele** acervo: o formato dos links depende de como cada equipe escreve
-o material. Repita a medição na sua instalação antes de tirar conclusões.
-- [x] Arquivo não-HTML na mesma área (`.js`) permanece inalterado
-- [x] `sortorder` preservado (o arquivo principal continua sendo o principal)
-- [x] `complete.php` tratado como cmid
-- [x] Host quebrado por hifenização, do site de origem e de terceiro site
-- [x] `.js` desligado: arquivo intacto; ligado: reescrito
-- [x] Em `.js`, concatenação e template literal nunca são alterados
+Os 156 links para outros Moodles ficam fora do denominador de propósito: o plugin os preserva por
+desenho, e contá-los como "não alcançados" seria puni-lo por seguir a própria regra. Ficam
+visíveis porque dizem algo sobre o acervo — que ele referencia outras instalações, o que importa
+se esses cursos forem migrados um dia.
 
-## Testes
+⚠️ **O que "outro Moodle" significa depende do backup.** A ferramenta compara o host do link com
+o `wwwroot` do site onde ela roda; o plugin, durante um restore, compara com o `original_wwwroot`
+daquele backup. Os dois coincidem quando backup e restore acontecem no mesmo site. Ao restaurar um
+curso vindo de outra instalação, os links daquela instalação deixam de ser "outro Moodle" e passam
+a ser reescritos, host e id — então a medição feita aqui subestima o alcance naquele cenário.
 
-A suíte é autocontida: não depende de script, container ou estrutura de diretórios de quem a
-executa. Em qualquer instalação com o ambiente de testes do Moodle preparado:
+Somando HTML e `.js`: dos 16.305 links no escopo, o plugin reescreve **88,7%** com a configuração
+padrão e **99,9%** com a opção `.js` ligada.
 
-    php admin/tool/phpunit/cli/init.php
-    vendor/bin/phpunit --testsuite local_resourcelinkfix_testsuite
-
-| Arquivo | Cobre |
-|---|---|
-| `tests/rewrite_links_test.php` | A reescrita: cmid, curso, `complete.php`, host de origem, terceiro site, host quebrado por hifenização, literal x montado em `.js` |
-| `tests/file_selection_test.php` | Quais arquivos entram, e o papel da opção `.js` |
-| `tests/restore_test.php` | Integração: backup e restore reais, em curso novo e em curso existente |
-
-`tests/fixtures/testable_plugin.php` é uma subclasse que substitui o construtor — a classe real
-só é instanciada pelo Moodle no meio de um restore — e expõe os métodos internos, evitando
-Reflection.
-
-Os testes de integração são os que importam para o ponto central do plugin: trocar o hook de
-`/module` para `/course` mantém todos os testes unitários verdes e derruba quatro dos de
-integração. O bug que motivou este plugin só aparece num restore de verdade.
+Os números valem para **aquele** acervo — o formato dos links depende de como cada equipe escreve
+o material. Rode `cli/measure_links.php --js` na sua instalação antes de tirar conclusões.
 
 ## Padrão de código
 

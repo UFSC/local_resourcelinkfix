@@ -217,6 +217,56 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
+     * Trava de seguranca: o conteudo novo difere do antigo SO nos links?
+     *
+     * Substitui cada link por um marcador fixo nos dois textos e compara o
+     * que sobra. Se o resto nao for identico, alguma coisa fora dos links
+     * mudou - texto perdido, arquivo truncado, regex que engoliu demais - e
+     * a reescrita daquele arquivo e abandonada.
+     *
+     * A alternativa seria confiar no regex. Um retorno nulo do PCRE ou um
+     * padrao que case mais do que devia grava por cima de material didatico
+     * sem deixar rastro, e o original ja foi substituido.
+     *
+     * @param string $old
+     * @param string $new
+     * @return bool Falso tambem quando nao foi possivel verificar.
+     */
+    protected function only_links_changed($old, $new) {
+        $marker = "\x00" . 'RLFLINK' . "\x00";
+        $pattern = self::get_link_pattern();
+
+        $maskedold = preg_replace($pattern, $marker, $old);
+        $maskednew = preg_replace($pattern, $marker, $new);
+
+        // Sem mascara confiavel nao ha verificacao: nega por seguranca.
+        if ($maskedold === null || $maskednew === null) {
+            return false;
+        }
+        return $maskedold === $maskednew;
+    }
+
+    /**
+     * Joga um conteudo no log do restore, em pedacos.
+     *
+     * O logger de restore nao foi feito para texto longo, entao a saida vai
+     * fatiada e com rotulo. O objetivo e permitir reconstruir o que teria
+     * sido perdido, nao produzir um diff legivel.
+     *
+     * @param string $label
+     * @param string $content
+     */
+    protected function log_content($label, $content) {
+        $chunks = str_split($content, 800);
+        $total = count($chunks);
+        foreach ($chunks as $i => $chunk) {
+            $this->task->get_logger()->process(
+                sprintf('local_resourcelinkfix [%s %d/%d] %s', $label, $i + 1, $total, $chunk),
+                backup::LOG_ERROR);
+        }
+    }
+
+    /**
      * Regrava o conteudo preservando o registro do arquivo (id, sortorder,
      * filename, timecreated). replace_file_with() troca so contenthash,
      * filesize, referencefileid e userid. Por isso o arquivo temporario
@@ -229,7 +279,33 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         $old = $file->get_content();
         $this->linkcount = 0;
         $new = $this->rewrite_links($old);
+
+        // preg_replace_callback() devolve null quando o PCRE aborta, sem
+        // lancar nada. Tratar isso como "conteudo novo" gravaria vazio por
+        // cima do arquivo, e o original se perderia. A excecao cai no
+        // catch de after_restore_module() e vira aviso no log do restore.
+        if ($new === null) {
+            throw new moodle_exception('errorpcre', 'local_resourcelinkfix', '',
+                preg_last_error());
+        }
+
         if ($new === $old) {
+            return;
+        }
+
+        // Trava: nada alem dos links pode ter mudado. Se mudou, o arquivo
+        // fica como esta e os dois conteudos vao para o log, para que dê
+        // para ver o que se perderia.
+        if (!$this->only_links_changed($old, $new)) {
+            $this->task->get_logger()->process(
+                get_string('errorcontentlost', 'local_resourcelinkfix', (object)array(
+                    'file' => $file->get_filepath() . $file->get_filename(),
+                    'cmid' => (int)$this->task->get_moduleid(),
+                    'oldsize' => strlen($old),
+                    'newsize' => strlen($new),
+                )), backup::LOG_ERROR);
+            $this->log_content('ANTES', $old);
+            $this->log_content('DEPOIS', $new);
             return;
         }
 
@@ -301,7 +377,16 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * @return string
      */
     public static function get_link_pattern() {
-        return '~(?:(https?://[ \t]*[a-z0-9.\-]+(?:[ \t]+[a-z0-9.\-]+)*)/)?(?<![a-z0-9_])' .
+        // Dominio, com porta opcional. Os fragmentos separados por espaco
+        // cobrem hifenizacao de texto colado de PDF ('moo- dle'); o limite
+        // de 4 e deliberado — com '*' o PCRE recursa uma vez por palavra e
+        // um texto longo depois de um 'http://' derruba o processo.
+        $domain = '[a-z0-9.\-]+(?:[ \t]+[a-z0-9.\-]+){0,4}(?::\d+)?';
+        // Subpasta: Moodle instalado em https://site/moodle. Cada segmento
+        // recusa 'mod' e 'course' para nao engolir o caminho que interessa.
+        $subdir = '(?:/(?!mod/|course/view)[a-z0-9_.\-]+){0,8}';
+
+        return '~(?:(https?://[ \t]*' . $domain . $subdir . ')/)?(?<![a-z0-9_])' .
                '((mod/[a-z0-9_]+/(view|index|complete)|course/view)\.php\?id=)(\d+)(?!\d)~i';
     }
 
@@ -324,6 +409,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      */
     protected function rewrite_links($content) {
         $pattern = self::get_link_pattern();
+        // A partir daqui o padrao e o mesmo usado por only_links_changed().
 
         return preg_replace_callback($pattern, function ($m) {
             $host = isset($m[1]) ? rtrim($m[1], '/') : '';
