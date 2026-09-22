@@ -37,6 +37,12 @@ if ($hassiteconfig) {
         1));
 
     $settings->add(new admin_setting_configcheckbox(
+        'local_resourcelinkfix/rewritejs',
+        get_string('rewritejs', 'local_resourcelinkfix'),
+        get_string('rewritejs_desc', 'local_resourcelinkfix'),
+        0));
+
+    $settings->add(new admin_setting_configcheckbox(
         'local_resourcelinkfix/dryrun',
         get_string('dryrun', 'local_resourcelinkfix'),
         get_string('dryrun_desc', 'local_resourcelinkfix'),

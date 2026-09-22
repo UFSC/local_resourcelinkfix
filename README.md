@@ -14,8 +14,9 @@ Para cada `mod_resource` restaurado:
 
 1. Lê o mapa `course_module` (cmid antigo → novo) do restore em andamento,
    ignorando `newitemid = 0` (módulo não restaurado por completo).
-2. Nos arquivos `.html`/`.htm` da área `content`, troca:
-   - `mod/xxx/view.php?id=CMID` → novo cmid
+2. Nos arquivos `.html`/`.htm` da área `content` (e nos `.js`, se a opção
+   estiver ligada), troca:
+   - `mod/xxx/view.php?id=CMID` e `mod/xxx/complete.php?id=CMID` → novo cmid
    - `mod/xxx/index.php?id=CURSO` e `course/view.php?id=CURSO` → novo curso
 3. Em backup vindo de **outro site**, troca também o `wwwroot` antigo
    (`original_wwwroot`) pelo deste site nos links absolutos.
@@ -24,6 +25,22 @@ Para cada `mod_resource` restaurado:
 
 IDs sem mapeamento ficam intactos, e a troca é feita em uma única passada —
 um cmid já reescrito não é remapeado.
+
+### Host quebrado por hifenização ainda é um host
+
+Texto colado de PDF ou Word chega com o domínio partido ao meio:
+
+    https:// exemplo.org/mod/resource/view.php?id=10
+    https://exem- plo.org/mod/resource/view.php?id=10
+    https://exemplo. org/mod/resource/view.php?id=10
+
+O host é normalizado antes de ser comparado — espaços somem, e o hífen que
+vem **seguido de espaço** some junto, por ser hifenização (`exam- ple`).
+O hífen legítimo de domínio (`meu-site`) não é seguido de espaço e permanece.
+
+Sem isso, a URL seria lida como caminho **relativo** e o id de um terceiro
+site acabaria remapeado — justamente o que a regra abaixo existe para impedir.
+Quando a URL quebrada é do site de origem e o id muda, ela sai consertada.
 
 ### Link de um terceiro site não é tocado
 
@@ -71,10 +88,12 @@ incondicional em `restore_activity_task::build()` (desde que a configuração
 | Opção | Padrão | O que faz |
 |---|---|---|
 | **Ativado** (`enabled`) | ligado | Desmarcado, o plugin não faz nada e o restore se comporta como se ele não existisse. |
+| **Reescrever também arquivos .js** (`rewritejs`) | desligado | Marcado, os `.js` da área `content` entram na reescrita. Só URLs completas com id numérico são tocadas — links montados em tempo de execução (`'view.php?id=' + cmid`) nunca são alterados. |
 | **Modo simulação** (`dryrun`) | desligado | Marcado, apenas registra no log do restore quais arquivos *seriam* reescritos e quantos links cada um tem. Nenhum arquivo é alterado. |
 
 A simulação serve para medir o impacto em um curso real antes de ligar a reescrita: restaure com
-ela marcada e leia o log do restore.
+ela marcada e leia o log do restore. Recomenda-se usá-la antes de ligar a opção `.js`, que mexe
+em **código**: um erro no HTML estraga um link, no `.js` pode quebrar a navegação do recurso.
 
 ## Instalação
 
@@ -104,11 +123,37 @@ Serve de referência e de material para reproduzir os cenários abaixo.
 - [x] Modo simulação: registra a contagem no log e não grava
 
 Os cenários acima foram exercitados com **material de exemplo** construído para cobrir cada
-regra, por `backup_controller`/`restore_controller` em um Moodle 3.0.5. Eles demonstram o
-mecanismo; **não** substituem uma medição de cobertura sobre o HTML real de uma instalação, que
-depende do formato dos links que cada equipe escreve — ver *Limitações*.
+regra, por `backup_controller`/`restore_controller` em um Moodle 3.0.5. Cada comportamento tem
+teste próprio, e as regras críticas foram verificadas por mutação — alterando o código de
+propósito para confirmar que o teste fica vermelho.
+
+### Medição em uma instalação real
+
+Números levantados em uma instalação Moodle 3.0 de porte médio, lendo o conteúdo dos arquivos
+(não apenas os registros da tabela `files`):
+
+| | |
+|---|---|
+| Arquivos HTML distintos em `mod_resource` | 4.968 |
+| Links de atividade em `href`/`src` | 13.245 |
+| Cobertos pelo regex | **13.227 (99,9%)** |
+| Com `id` fora da primeira posição | **0** |
+| Fora do padrão (`player.php?a=`, `edit.php?d=`) | 9 |
+| Arquivos `.js` distintos | 2.214 |
+| Deles, com link de atividade | 264 |
+| Links dentro de `.js` | 1.833 |
+| Desses, URL literal (alcançável) | **1.827 (99,7%)** |
+| Montados em tempo de execução | **0** |
+
+Com a opção `.js` ligada, a cobertura passa de 88% para cerca de 99,8% dos links daquele acervo.
+Os números valem para **aquele** acervo: o formato dos links depende de como cada equipe escreve
+o material. Repita a medição na sua instalação antes de tirar conclusões.
 - [x] Arquivo não-HTML na mesma área (`.js`) permanece inalterado
 - [x] `sortorder` preservado (o arquivo principal continua sendo o principal)
+- [x] `complete.php` tratado como cmid
+- [x] Host quebrado por hifenização, do site de origem e de terceiro site
+- [x] `.js` desligado: arquivo intacto; ligado: reescrito
+- [x] Em `.js`, concatenação e template literal nunca são alterados
 
 ## Padrão de código
 
@@ -121,7 +166,10 @@ Os comentários e o `lang/pt_br` estão em português.
 
 - Só trata `mod_resource`; o `id` precisa ser o primeiro parâmetro da URL
   (`view.php?id=N`, não `view.php?x=1&id=N`).
-- Não reescreve links em arquivos `.js` ou `.css`.
+- Não reescreve `.css`, nem `.js` enquanto a opção correspondente estiver desligada.
+- Scripts que usam o id da **instância** em vez do cmid ficam de fora:
+  `mod/scorm/player.php?a=N`, `mod/data/edit.php?d=N`. Mapeá-los exigiria o
+  mapeamento por módulo, que é outro mecanismo.
 - Fora dos links de atividade/curso, o `wwwroot` antigo permanece: um
   `pluginfile.php` ou `/user/view.php` do site de origem não é tocado.
 - Links **relativos** para atividade que não veio no backup continuam

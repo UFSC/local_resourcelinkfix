@@ -32,6 +32,13 @@
 
     <!-- index.php de um modulo recebe o id do CURSO, nao um cmid: 42 -> 77. -->
     <li><a href="../../mod/forum/index.php?id=42">Todos os foruns</a></li>
+
+    <!-- complete.php tambem recebe um cmid: 101 -> 201. -->
+    <li><a href="../../mod/questionnaire/complete.php?id=101">Responder questionario</a></li>
+
+    <!-- Dominio do site de origem quebrado por hifenizacao: reconhecido,
+         e a URL sai consertada. -->
+    <li><a href="https://origem.exam- ple.org/mod/page/view.php?id=102">Unidade 2 (URL quebrada na origem)</a></li>
 </ul>
 
 <h1>Links preservados, e por que</h1>
@@ -53,6 +60,11 @@
     <!-- O id nao e o primeiro parametro: limitacao conhecida, passa intacto. -->
     <li><a href="../../mod/page/view.php?forceview=1&amp;id=101">Unidade 1 (forma nao suportada)</a></li>
 
+    <!-- Terceiro site com o dominio quebrado por hifenizacao: continua sendo
+         terceiro site, nada muda. Antes da normalizacao do host, este caso era
+         lido como caminho relativo e tinha o id remapeado. -->
+    <li><a href="https://terceiro.exam ple.com/mod/page/view.php?id=102">Dominio quebrado de outro site</a></li>
+
     <!-- Nao e link de atividade nem de curso. -->
     <li><a href="https://origem.example.org/pluginfile.php/123/mod_resource/content/0/anexo.pdf">Anexo</a></li>
 
@@ -61,8 +73,10 @@
 </ul>
 
 <!--
-  Nao coberto por desenho: links dentro de .js e .css. Se a navegacao do curso
-  for montada por JavaScript, os links dela nao sao reescritos.
+  Arquivos .js so entram quando a configuracao 'Reescrever tambem arquivos .js'
+  estiver ligada, e mesmo assim apenas URLs literais com id numerico: links
+  montados em tempo de execucao ('view.php?id=' + cmid) nunca sao alterados.
+  Arquivos .css nunca sao tocados.
 -->
 <script src="./js/navegacao.js"></script>
 

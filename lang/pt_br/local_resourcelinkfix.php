@@ -32,6 +32,12 @@ $string['enabled_desc'] = 'Reescreve, durante o restore, os links para atividade
 arquivos HTML de recursos do tipo Arquivo (mod_resource). Desativado, o plugin não faz nada e
 o restore se comporta exatamente como se ele não existisse.';
 
+$string['rewritejs'] = 'Reescrever também arquivos .js';
+$string['rewritejs_desc'] = 'Reescreve os links dentro de arquivos <code>.js</code>, e não só no
+HTML. Só URLs completas com id numérico são tocadas, então links montados em tempo de execução
+(<code>\'view.php?id=\' + cmid</code>) nunca são alterados. Um .js é código: meça o impacto com o
+modo simulação antes de ligar.';
+
 $string['dryrun'] = 'Modo simulação (não grava)';
 $string['dryrun_desc'] = 'Apenas registra no log do restore quais arquivos <em>seriam</em>
 reescritos e quantos links cada um tem. Nenhum arquivo é alterado. Serve para medir o impacto

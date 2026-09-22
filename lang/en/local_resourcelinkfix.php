@@ -32,6 +32,12 @@ $string['enabled_desc'] = 'Rewrite activity links inside the HTML files of File 
 (mod_resource) during restore. When disabled, the plugin does nothing and restore behaves
 exactly as it would without it.';
 
+$string['rewritejs'] = 'Also rewrite .js files';
+$string['rewritejs_desc'] = 'Rewrite links inside <code>.js</code> files as well, not only HTML.
+Only complete URLs with a numeric id are touched, so links built at run time
+(<code>\'view.php?id=\' + cmid</code>) are never altered. A .js file is code: measure the impact
+with simulation mode before enabling this.';
+
 $string['dryrun'] = 'Simulation mode (do not write)';
 $string['dryrun_desc'] = 'Only report, in the restore log, which files <em>would</em> be
 rewritten and how many links each one has. No file is changed. Useful for measuring the

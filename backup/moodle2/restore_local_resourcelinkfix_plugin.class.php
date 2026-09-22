@@ -66,6 +66,9 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     /** @var int Links trocados no arquivo corrente. */
     protected $linkcount = 0;
 
+    /** @var bool Reescrever tambem arquivos .js. */
+    protected $rewritejs = false;
+
     /**
      * Conexao no ponto /module, e nao em /course.
      *
@@ -119,6 +122,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             return;
         }
         $this->dryrun = (bool)get_config('local_resourcelinkfix', 'dryrun');
+        $this->rewritejs = (bool)get_config('local_resourcelinkfix', 'rewritejs');
 
         $this->newcourseid = (int)$this->task->get_courseid();
         $this->oldcourseid = (int)$this->task->get_old_courseid();
@@ -145,7 +149,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         $fs = get_file_storage();
         $files = $fs->get_area_files($context->id, 'mod_resource', 'content', 0, 'sortorder', false);
         foreach ($files as $file) {
-            if (!preg_match('/\.html?$/i', $file->get_filename())) {
+            if (!$this->should_process_file($file->get_filename())) {
                 continue;
             }
             // Alias ou arquivo externo: o conteudo pertence a outro lugar.
@@ -163,6 +167,23 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
                     backup::LOG_WARNING);
             }
         }
+    }
+
+    /**
+     * Decide se um arquivo da area content entra na reescrita.
+     *
+     * HTML sempre. Arquivos .js so quando a configuracao estiver ligada:
+     * .js e codigo, e um erro ali quebra a navegacao inteira do recurso,
+     * nao um link.
+     *
+     * @param string $filename
+     * @return bool
+     */
+    protected function should_process_file($filename) {
+        if (preg_match('/\.html?$/i', $filename)) {
+            return true;
+        }
+        return $this->rewritejs && (bool)preg_match('/\.js$/i', $filename);
     }
 
     /**
@@ -265,16 +286,25 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * @return string
      */
     protected function rewrite_links($content) {
-        $pattern = '~(?:(https?://[a-z0-9.\-]+)/)?(?<![a-z0-9_])' .
-                   '((mod/[a-z0-9_]+/(view|index)|course/view)\.php\?id=)(\d+)(?!\d)~i';
+        // O host aceita espacos internos: texto colado de PDF chega com o
+        // dominio quebrado por hifenizacao ('moo- dle', 'https:// site').
+        // Sem isso, a URL seria lida como caminho relativo e o id de um
+        // terceiro site acabaria remapeado.
+        $pattern = '~(?:(https?://[ \t]*[a-z0-9.\-]+(?:[ \t]+[a-z0-9.\-]+)*)/)?(?<![a-z0-9_])' .
+                   '((mod/[a-z0-9_]+/(view|index|complete)|course/view)\.php\?id=)(\d+)(?!\d)~i';
 
         return preg_replace_callback($pattern, function ($m) {
             $host = isset($m[1]) ? rtrim($m[1], '/') : '';
+            // Hifen seguido de espaco e hifenizacao de texto ('exam- ple'):
+            // sai junto. Hifen legitimo de dominio ('meu-site') nao e
+            // seguido de espaco, entao fica.
+            $cleanhost = preg_replace('/-[ \t]+/', '', $host);
+            $cleanhost = preg_replace('/[ \t]+/', '', $cleanhost);
 
             // Host absoluto de um terceiro site: o id pertence a ele, nao a
             // este restore. Remapea-lo apontaria para la com um id daqui, que
             // la e outra atividade. Nao se toca em nada.
-            if ($host !== '' && strcasecmp($host, $this->oldwwwroot) !== 0) {
+            if ($cleanhost !== '' && strcasecmp($cleanhost, $this->oldwwwroot) !== 0) {
                 return $m[0];
             }
 
