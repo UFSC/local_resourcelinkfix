@@ -92,6 +92,33 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
     }
 
     /**
+     * Exercita o caminho de rewrite_file() que decide gravar ou recusar,
+     * sem precisar de um stored_file nem de um restore em andamento.
+     *
+     * Devolve o conteudo que seria gravado, ou lanca a mesma excecao que
+     * rewrite_file() lancaria.
+     *
+     * @param string $old
+     * @return string|null Null quando nada seria gravado.
+     * @throws moodle_exception Quando o PCRE aborta.
+     */
+    public function rewrite_file_for_test($old) {
+        $new = $this->rewrite_links($old);
+
+        if ($new === null) {
+            throw new moodle_exception('errorpcre', 'local_resourcelinkfix', '',
+                preg_last_error());
+        }
+        if ($new === $old) {
+            return null;
+        }
+        if (!$this->only_links_changed($old, $new)) {
+            return null;
+        }
+        return $new;
+    }
+
+    /**
      * A trava: o conteudo novo difere do antigo apenas nos links?
      *
      * @param string $old

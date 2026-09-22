@@ -70,20 +70,59 @@ class local_resourcelinkfix_pcre_limits_testcase extends advanced_testcase {
     }
 
     /**
-     * Com o PCRE abortando, a reescrita nao pode devolver null nem conteudo
-     * vazio: o arquivo original seria perdido.
+     * Com o PCRE abortando de verdade, a reescrita devolve null.
+     *
+     * Este teste fixa o limiar: o valor usado precisa fazer o PCRE abortar,
+     * senao o teste seguinte passa por engano. Medido neste ambiente: com
+     * backtrack_limit=100 o padrao ainda conclui; a partir de 30 ele aborta.
      */
-    public function test_pcre_abortado_nao_devolve_null() {
-        ini_set('pcre.backtrack_limit', '100');
+    public function test_limite_escolhido_realmente_aborta_o_pcre() {
+        ini_set('pcre.backtrack_limit', '10');
 
         $plugin = $this->plugin();
-        $content = '<p>http://x ' . str_repeat('palavra ', 3000) . '</p>'
+        $result = $plugin->rewrite($this->conteudo_pesado());
+
+        $this->assertNull($result, 'o limite escolhido nao fez o PCRE abortar; '
+            . 'sem isso os testes de defesa passam sem exercitar nada');
+        $this->assertSame(PREG_BACKTRACK_LIMIT_ERROR, preg_last_error());
+    }
+
+    /**
+     * Com o PCRE abortado, rewrite_file() recusa o arquivo em vez de gravar.
+     *
+     * O retorno null nao pode virar conteudo: gravado, apagaria o arquivo.
+     */
+    public function test_rewrite_file_recusa_quando_o_pcre_aborta() {
+        $this->resetAfterTest(true);
+        ini_set('pcre.backtrack_limit', '10');
+
+        $plugin = $this->plugin();
+        $this->setExpectedException('moodle_exception');
+        $plugin->rewrite_file_for_test($this->conteudo_pesado());
+    }
+
+    /**
+     * Com o PCRE abortado, a trava nega: sem mascara nao ha verificacao.
+     */
+    public function test_trava_nega_quando_nao_consegue_verificar() {
+        ini_set('pcre.backtrack_limit', '10');
+
+        $plugin = $this->plugin();
+        $pesado = $this->conteudo_pesado();
+
+        $this->assertFalse($plugin->only_links_differ($pesado, $pesado),
+            'sem mascara confiavel a trava tem de negar, mesmo com textos iguais');
+    }
+
+    /**
+     * Conteudo que faz o PCRE trabalhar o bastante para abortar sob limite
+     * baixo, e que contem um link a reescrever.
+     *
+     * @return string
+     */
+    protected function conteudo_pesado() {
+        return '<p>http://x ' . str_repeat('palavra ', 3000) . '</p>'
             . '<a href="../../mod/page/view.php?id=101">link</a>';
-
-        $result = $plugin->rewrite($content);
-
-        $this->assertNotNull($result, 'rewrite nao pode devolver null');
-        $this->assertNotSame('', $result, 'rewrite nao pode devolver vazio');
     }
 
     /**

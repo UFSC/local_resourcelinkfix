@@ -26,21 +26,22 @@ Para cada `mod_resource` restaurado:
 IDs sem mapeamento ficam intactos, e a troca é feita em uma única passada —
 um cmid já reescrito não é remapeado.
 
-### Host quebrado por hifenização ainda é um host
+### Na dúvida sobre a URL, não se toca
 
-Texto colado de PDF ou Word chega com o domínio partido ao meio:
+O plugin não tenta adivinhar a forma de um endereço. Quando há indício de URL
+absoluta — `://`, `//` no início, credencial, ou um último segmento que pareça
+domínio — e a base não pode ser confirmada como a do site de origem, o link
+fica exatamente como está.
 
-    https:// exemplo.org/mod/resource/view.php?id=10
-    https://exem- plo.org/mod/resource/view.php?id=10
-    https://exemplo. org/mod/resource/view.php?id=10
+Isso vale inclusive para formas que o plugin não sabe ler: IPv6
+(`https://[2001:db8::1]/...`), domínio com underscore, caminho longo, barra
+dupla, esquema não-HTTP. A ausência de reconhecimento nunca vira permissão
+para remapear.
 
-O host é normalizado antes de ser comparado — espaços somem, e o hífen que
-vem **seguido de espaço** some junto, por ser hifenização (`exam- ple`).
-O hífen legítimo de domínio (`meu-site`) não é seguido de espaço e permanece.
-
-Sem isso, a URL seria lida como caminho **relativo** e o id de um terceiro
-site acabaria remapeado — justamente o que a regra abaixo existe para impedir.
-Quando a URL quebrada é do site de origem e o id muda, ela sai consertada.
+A regra existe porque o inverso — supor "caminho relativo" sempre que o host
+não é reconhecido — faz o id de um link para **outro** Moodle ser trocado pelo
+daqui. O link continua abrindo, mas mostra a atividade errada, sem erro visível.
+Um link obsoleto é preferível a um silenciosamente errado.
 
 ### Link de um terceiro site não é tocado
 
@@ -113,6 +114,10 @@ Serve de referência e de material para reproduzir os cenários abaixo.
 - [x] Restaurar em curso existente apagando o conteúdo (`TARGET_EXISTING_DELETING`)
 - [x] Importar atividades de outro curso (`MODE_IMPORT`)
 - [x] Links absolutos (`https://.../mod/...`) e relativos (`../../mod/...`)
+- [x] URL sem esquema (`//site/mod/...`) e com credencial (`user@site`)
+- [x] Host com subpasta (`site/moodle`) e com porta (`site:8080`)
+- [x] Host irreconhecível (IPv6, underscore, caminho longo, barra dupla,
+      esquema não-HTTP): o id **não** é remapeado
 - [x] Link para atividade que NÃO veio no backup (permanece inalterado)
 - [x] Recurso com vários arquivos HTML (subpáginas)
 - [x] Backup vindo de outro site: `wwwroot` antigo trocado nos links mapeados
@@ -179,6 +184,28 @@ padrão e **99,9%** com a opção `.js` ligada.
 Os números valem para **aquele** acervo — o formato dos links depende de como cada equipe escreve
 o material. Rode `cli/measure_links.php --js` na sua instalação antes de tirar conclusões.
 
+## Testes
+
+A suíte é autocontida: não depende de script, container ou estrutura de diretórios de quem a
+executa. Em qualquer instalação com o ambiente de testes do Moodle preparado:
+
+    php admin/tool/phpunit/cli/init.php
+    vendor/bin/phpunit --testsuite local_resourcelinkfix_testsuite
+
+| Arquivo | Cobre |
+|---|---|
+| `tests/rewrite_links_test.php` | A reescrita: cmid, curso, `complete.php`, host de origem, terceiro site, host quebrado por hifenização, literal x montado em `.js` |
+| `tests/file_selection_test.php` | Quais arquivos entram, e o papel da opção `.js` |
+| `tests/restore_test.php` | Integração: backup e restore reais, em curso novo e em curso existente |
+
+`tests/fixtures/testable_plugin.php` é uma subclasse que substitui o construtor — a classe real
+só é instanciada pelo Moodle no meio de um restore — e expõe os métodos internos, evitando
+Reflection.
+
+Os testes de integração são os que importam para o ponto central do plugin: trocar o hook de
+`/module` para `/course` mantém todos os testes unitários verdes e derruba quatro dos de
+integração. O bug que motivou este plugin só aparece num restore de verdade.
+
 ## Padrão de código
 
 Segue o [Moodle Coding Style](https://moodledev.io/general/development/policies/codingstyle):
@@ -196,6 +223,15 @@ Os comentários e o `lang/pt_br` estão em português.
   mapeamento por módulo, que é outro mecanismo.
 - Fora dos links de atividade/curso, o `wwwroot` antigo permanece: um
   `pluginfile.php` ou `/user/view.php` do site de origem não é tocado.
+- **Host partido por hifenização não é corrigido.** Texto colado de PDF chega
+  com o domínio quebrado (`https:// site`, `exam- ple`, `site. org`). Como o
+  espaço impede ler a URL inteira, o link é preservado em vez de adivinhado.
+  Medido em uma instalação real: 6 ocorrências em 14.628 links.
+- **URL com espaço literal no caminho** (`https://site/pasta com espaco/mod/...`)
+  é lida como caminho relativo, e o id pode ser remapeado mesmo sendo de outro
+  site. Endereço com espaço é malformado — o correto é `%20`, que o plugin trata
+  normalmente. Fechar esse caso faria o plugin deixar de corrigir links
+  relativos precedidos de texto com `://`, que são mais comuns.
 - Links **relativos** para atividade que não veio no backup continuam
   apontando para este site com um id alheio — não há host antigo a preservar.
 - Arquivos externos/alias (`is_external_file()`) são ignorados de propósito.

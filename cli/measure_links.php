@@ -168,7 +168,13 @@ foreach ($htmlfiles as $content) {
     // frente faz backtracking quadratico quando o arquivo tem uma sequencia
     // longa sem espaco - imagem embutida em base64, por exemplo: medido em
     // 10,5 s para 30 KB, contra 1,3 ms nesta forma.
-    if (!preg_match_all('~(?:https?://[^\s"\'<>()]{0,200})?(?:/|^|(?<=[\s"\'>(]))'
+    // A ancora acompanha a do plugin ((?<![a-z0-9_])), para nao deixar de
+    // ver link que ele reescreve - atributo sem aspas, apos virgula, etc.
+    // O prefixo absoluto e ancorado e limitado de proposito: um '[^\s]*'
+    // guloso na frente faz backtracking quadratico quando o arquivo tem uma
+    // sequencia longa sem espaco (imagem em base64): 10,5 s para 30 KB,
+    // contra 1,3 ms nesta forma.
+    if (!preg_match_all('~(?:(?:https?:)?//[^\s"\'<>()]{0,400})?(?<![a-z0-9_])'
             . '(?:mod/[a-z0-9_]+/[a-z0-9_]+|course/view|user/view)\.php\?[^"\'\s>)]{0,400}~i',
             $content, $found_urls)) {
         continue;
@@ -182,7 +188,9 @@ foreach ($htmlfiles as $content) {
         $stats['total']++;
         $script = strtolower(ltrim($parts[1], '/'));
         $scripts[$script] = isset($scripts[$script]) ? $scripts[$script] + 1 : 1;
-        $host = preg_match('~^(https?://[a-z0-9.\-]+)/~i', $url, $h)
+        // Aceita porta e URL sem esquema, como o padrao do plugin: sem
+        // isso as duas tabelas do mesmo relatorio discordariam.
+        $host = preg_match('~^((?:https?:)?//[^\s/"\'<>]+)/~i', $url, $h)
             ? strtolower($h[1]) : '(relativo)';
         $hosts[$host] = isset($hosts[$host]) ? $hosts[$host] + 1 : 1;
 

@@ -149,20 +149,27 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
     }
 
     /**
-     * Host partido por hifenizacao continua sendo host.
+     * Host partido por hifenizacao e PRESERVADO, nao corrigido.
      *
-     * Texto colado de PDF chega assim. Sem normalizar, a URL seria lida como
-     * caminho relativo e o id de outro site acabaria remapeado.
+     * Texto colado de PDF chega com o dominio partido ('https:// site',
+     * 'exam- ple'). Corrigir esses links exigiria adivinhar onde o host
+     * comeca e termina - foi tentando isso que o plugin passou a ler URL
+     * absoluta como caminho relativo e a remapear o id de links para outros
+     * Moodles. A decisao e nao adivinhar: o link fica como esta e continua
+     * valido no site de origem.
+     *
+     * Medido em uma instalacao real: 6 ocorrencias em 14.628 links.
      */
-    public function test_host_quebrado_por_hifenizacao_e_reconhecido() {
+    public function test_host_quebrado_por_hifenizacao_e_preservado() {
         $plugin = $this->plugin();
-        $esperado = self::DESTINO . '/mod/resource/view.php?id=201';
-        $this->assertSame($esperado,
-            $plugin->rewrite('https:// origem.example.org/mod/resource/view.php?id=101'));
-        $this->assertSame($esperado,
-            $plugin->rewrite('https://origem.exam- ple.org/mod/resource/view.php?id=101'));
-        $this->assertSame($esperado,
-            $plugin->rewrite('https://origem. example.org/mod/resource/view.php?id=101'));
+        $casos = array(
+            'espaco apos o esquema' => 'https:// origem.example.org/mod/resource/view.php?id=101',
+            'hifenizacao no meio'   => 'https://origem.exam- ple.org/mod/resource/view.php?id=101',
+            'espaco apos o ponto'   => 'https://origem. example.org/mod/resource/view.php?id=101',
+        );
+        foreach ($casos as $nome => $url) {
+            $this->assertSame($url, $plugin->rewrite($url), 'deveria preservar: ' . $nome);
+        }
     }
 
     /**
@@ -234,6 +241,100 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
         // Terceiro site com porta: intacto.
         $this->assertSame('http://outro.example.com:8080/mod/page/view.php?id=101',
             $plugin->rewrite('http://outro.example.com:8080/mod/page/view.php?id=101'));
+    }
+
+    /**
+     * URL sem esquema (protocol-relative) tambem tem host.
+     *
+     * '//site/mod/...' e forma valida e comum em HTML exportado. Sem
+     * reconhece-la, a URL vira caminho relativo e o id de um terceiro site
+     * acaba remapeado.
+     */
+    public function test_url_sem_esquema_e_reconhecida() {
+        $plugin = $this->plugin();
+        // Terceiro site: intacto.
+        $this->assertSame('//terceiro.example.com/mod/page/view.php?id=101',
+            $plugin->rewrite('//terceiro.example.com/mod/page/view.php?id=101'));
+        $this->assertSame('//terceiro.example.com/moodle/mod/page/view.php?id=101',
+            $plugin->rewrite('//terceiro.example.com/moodle/mod/page/view.php?id=101'));
+        // Site de origem sem esquema: id remapeado, host trocado, e a
+        // forma sem esquema e preservada - ela herda o esquema da pagina.
+        $this->assertSame('//destino.example.net/mod/page/view.php?id=201',
+            $plugin->rewrite('//origem.example.org/mod/page/view.php?id=101'));
+    }
+
+    /**
+     * URL com credencial embutida tambem tem host.
+     */
+    public function test_url_com_credencial_e_reconhecida() {
+        $plugin = $this->plugin();
+        $this->assertSame('https://u:s@terceiro.example.com/mod/page/view.php?id=101',
+            $plugin->rewrite('https://u:s@terceiro.example.com/mod/page/view.php?id=101'));
+        $this->assertSame('https://prof@terceiro.example.com/mod/page/view.php?id=101',
+            $plugin->rewrite('https://prof@terceiro.example.com/mod/page/view.php?id=101'));
+    }
+
+    /**
+     * Quando o host existe mas nao e reconhecivel, nao se toca no id.
+     *
+     * Os limites de segmento e de caracteres do padrao fazem certos hosts
+     * nao casarem. A falha tem de ser conservadora: preservar, nunca
+     * remapear um id que talvez pertenca a outro site.
+     */
+    public function test_host_irreconhecivel_nao_tem_id_remapeado() {
+        $plugin = $this->plugin();
+        $casos = array(
+            'segmento com til' => 'https://terceiro.example.com/~prof/moodle/mod/page/view.php?id=101',
+            'muitos segmentos' => 'https://terceiro.example.com/a/b/c/d/e/f/g/h/i/mod/page/view.php?id=101',
+            'porcentagem'      => 'https://terceiro.example.com/a%20b/mod/page/view.php?id=101',
+        );
+        foreach ($casos as $nome => $url) {
+            $this->assertSame($url, $plugin->rewrite($url), 'nao pode remapear: ' . $nome);
+        }
+    }
+
+    /**
+     * Qualquer indicio de URL absoluta preserva o link, mesmo em forma que
+     * o plugin nao saiba ler.
+     *
+     * A decisao e deliberadamente conservadora: quando ha '://', '//' no
+     * inicio ou credencial, e o host nao pode ser confirmado como o de
+     * origem, nao se toca. O custo de errar e apontar para outro Moodle com
+     * um id daqui, que abre a atividade errada em silencio.
+     */
+    public function test_forma_de_url_nao_prevista_e_preservada() {
+        $plugin = $this->plugin();
+        $casos = array(
+            'IPv6'                => 'https://[2001:db8::1]/mod/page/view.php?id=101',
+            'host com underscore' => 'https://meu_site.example.com/mod/page/view.php?id=101',
+            'muitos segmentos'    => 'https://t.example.com/a/b/c/d/e/f/g/h/i/j/k/l/m/mod/page/view.php?id=101',
+            'barra dupla'         => 'https://t.example.com//mod/page/view.php?id=101',
+            'porta e subpasta'    => 'https://t.example.com:8443/lms/mod/page/view.php?id=101',
+            'esquema maiusculo'   => 'HTTPS://T.EXAMPLE.COM/mod/page/view.php?id=101',
+            'sem esquema'         => '//t.example.com/mod/page/view.php?id=101',
+            'com credencial'      => 'https://u:s@t.example.com/mod/page/view.php?id=101',
+        );
+        foreach ($casos as $nome => $url) {
+            $this->assertSame($url, $plugin->rewrite($url), 'nao pode remapear: ' . $nome);
+        }
+    }
+
+    /**
+     * Caminho relativo continua sendo corrigido: a inversao nao pode
+     * transformar o plugin em um que nao faz nada.
+     */
+    public function test_caminho_relativo_continua_sendo_corrigido() {
+        $plugin = $this->plugin();
+        $casos = array(
+            '../../mod/page/view.php?id=101'   => '../../mod/page/view.php?id=201',
+            './mod/page/view.php?id=101'       => './mod/page/view.php?id=201',
+            '/mod/page/view.php?id=101'        => '/mod/page/view.php?id=201',
+            'mod/page/view.php?id=101'         => 'mod/page/view.php?id=201',
+            '../mod/quiz/view.php?id=102'      => '../mod/quiz/view.php?id=202',
+        );
+        foreach ($casos as $entra => $sai) {
+            $this->assertSame($sai, $plugin->rewrite($entra), 'deveria corrigir: ' . $entra);
+        }
     }
 
     /**
@@ -389,6 +490,49 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
         $this->assertFalse($plugin->only_links_differ($old,
             '<a href="../../mod/page/view.php?id=201">A</a><a href="../../mod/page/view.php?id=202">B</a>'));
         $this->assertFalse($plugin->only_links_differ($old, '<a href="">A</a>'));
+    }
+
+    /**
+     * O arquivo de exemplo diz a verdade sobre o que cada link sofre.
+     *
+     * example/navigation.html e documentacao executavel: cada link tem um
+     * comentario dizendo o que acontece com ele. Sem este teste, o exemplo
+     * passa a mentir na primeira mudanca de comportamento.
+     */
+    public function test_arquivo_de_exemplo_confere() {
+        global $CFG;
+
+        $plugin = $this->plugin();
+        $antes = file_get_contents($CFG->dirroot .
+            '/local/resourcelinkfix/example/navigation.html');
+        $depois = $plugin->rewrite($antes);
+
+        // Prometidos reescritos.
+        foreach (array(
+            '../../mod/page/view.php?id=201',
+            self::DESTINO . '/mod/quiz/view.php?id=202',
+            self::DESTINO . '/course/view.php?id=77',
+            '../../mod/forum/index.php?id=77',
+            '../../mod/questionnaire/complete.php?id=201',
+        ) as $esperado) {
+            $this->assertContains('href="' . $esperado . '"', $depois,
+                'deveria ter sido reescrito para: ' . $esperado);
+        }
+
+        // Prometidos preservados.
+        foreach (array(
+            'https://origem.exam- ple.org/mod/page/view.php?id=102',
+            self::ORIGEM . '/mod/chat/view.php?id=103',
+            self::TERCEIRO . '/mod/page/view.php?id=102',
+            self::TERCEIRO . '/course/view.php?id=42',
+            'https://terceiro.exam ple.com/mod/page/view.php?id=102',
+            '../../mod/page/view.php?forceview=1&amp;id=101',
+            self::ORIGEM . '/pluginfile.php/123/mod_resource/content/0/anexo.pdf',
+            self::ORIGEM . '/course/view.php?id=99',
+        ) as $esperado) {
+            $this->assertContains('href="' . $esperado . '"', $depois,
+                'deveria ter sido preservado: ' . $esperado);
+        }
     }
 
     /**

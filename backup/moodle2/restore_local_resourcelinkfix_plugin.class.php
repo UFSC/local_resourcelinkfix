@@ -217,6 +217,135 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
+     * O prefixo colado antes do caminho indica uma URL absoluta?
+     *
+     * Tres perguntas que nao dependem de prever a forma do host, e por isso
+     * nao deixam passar forma nova de URL.
+     *
+     * @param string $prefix
+     * @return bool
+     */
+    protected function looks_absolute($prefix) {
+        if (strpos($prefix, '://') !== false) {
+            return true;
+        }
+        if (strpos($prefix, '//') === 0) {
+            return true;
+        }
+        if (strpos($prefix, '@') !== false) {
+            return true;
+        }
+        // Ultimo segmento parece dominio ('ple.com/'). Cobre o caso do host
+        // partido por hifenizacao, em que o '://' ficou para tras do espaco
+        // e nao entrou no prefixo. Na duvida, tratar como absoluto: o custo
+        // de errar para este lado e so deixar de corrigir um link.
+        return (bool)preg_match('~\.[a-z]{2,}(?::\d+)?/?$~i', $prefix);
+    }
+
+    /**
+     * Reduz um prefixo a uma forma comparavel: sem esquema, sem espacos de
+     * hifenizacao, sem credencial, sem o lixo que vier antes da URL.
+     *
+     * Comparar a BASE inteira, e nao so o host, e o que permite reconhecer
+     * um Moodle instalado em subpasta - onde o wwwroot e 'site/moodle'.
+     *
+     * @param string $prefix
+     * @return string|null Null quando nao ha base legivel.
+     */
+    protected function normalize_base($prefix) {
+        // Hifenizacao de texto colado de PDF: 'moo- dle', 'https:// site'.
+        $clean = preg_replace('/-[ \t]+/', '', $prefix);
+        $clean = preg_replace('/[ \t]+/', '', $clean);
+
+        // Corta o que vier antes da URL: 'url(', 'href=', texto.
+        $pos = strrpos($clean, '://');
+        if ($pos !== false) {
+            $start = $pos;
+            while ($start > 0 && preg_match('~[a-z0-9+.\-]~i', $clean[$start - 1])) {
+                $start--;
+            }
+            $clean = substr($clean, $start);
+        }
+
+        // Tira o esquema e a marca de autoridade, se houver.
+        $clean = preg_replace('~^[a-z][a-z0-9+.\-]*:~i', '', $clean);
+        $clean = preg_replace('~^//~', '', $clean);
+        // Credencial nao faz parte da identidade do site.
+        $clean = preg_replace('~^[^/@]*@~', '', $clean);
+
+        return ($clean === '') ? null : $clean;
+    }
+
+    /**
+     * O prefixo aponta para o site onde o backup foi feito?
+     *
+     * A comparacao e por inicio de string, com a barra final incluida, de
+     * modo que 'origem.org.outro.com/' nao passe por 'origem.org/'.
+     *
+     * @param string $prefix
+     * @return bool
+     */
+    protected function is_origin_prefix($prefix) {
+        if ($this->oldwwwroot === '') {
+            return false;
+        }
+
+        // Sem a marca de autoridade no prefixo nao da para afirmar que a URL
+        // foi lida inteira: pode haver um esquema antes, cortado por espaco
+        // de hifenizacao. Afirmar origem nesse caso produziria um endereco
+        // com dois esquemas colados.
+        if (strpos(preg_replace('/[ \t]+/', '', $prefix), '//') === false) {
+            return false;
+        }
+
+        $base = $this->normalize_base($prefix);
+        $origin = $this->normalize_base($this->oldwwwroot . '/');
+        if ($base === null || $origin === null) {
+            return false;
+        }
+        return (strcasecmp(substr($base, 0, strlen($origin)), $origin) === 0);
+    }
+
+    /**
+     * Troca a autoridade (esquema + host) dentro do prefixo, preservando o
+     * que vier antes e o caminho intermediario.
+     *
+     * @param string $prefix
+     * @param string $target Novo wwwroot.
+     * @return string
+     */
+    protected function replace_authority($prefix, $target) {
+        // Da autoridade ate o fim do prefixo, tolerando a hifenizacao.
+        $pattern = '~(?:[a-z][a-z0-9+.\-]*:)?[ \t]*//.*$~i';
+        if (preg_match($pattern, $prefix)) {
+            return preg_replace($pattern, $target . '/', $prefix, 1);
+        }
+        // Host partido sem '//' visivel no prefixo: substitui o trecho final
+        // que parece dominio.
+        return preg_replace('~[^\s/]*\.[a-z]{2,}(?::\d+)?/?$~i', $target . '/', $prefix, 1);
+    }
+
+    /**
+     * O host e o do site onde o backup foi feito?
+     *
+     * URL sem esquema herda o esquema da pagina, entao a comparacao ignora
+     * o esquema dos dois lados nesse caso.
+     *
+     * @param string $host
+     * @return bool
+     */
+    protected function is_origin_host($host) {
+        if ($this->oldwwwroot === '') {
+            return false;
+        }
+        $origin = $this->oldwwwroot;
+        if (strpos($host, '//') === 0) {
+            $origin = preg_replace('~^https?:~i', '', $origin);
+        }
+        return (strcasecmp($host, $origin) === 0);
+    }
+
+    /**
      * Trava de seguranca: o conteudo novo difere do antigo SO nos links?
      *
      * Substitui cada link por um marcador fixo nos dois textos e compara o
@@ -257,12 +386,24 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * @param string $content
      */
     protected function log_content($label, $content) {
-        $chunks = str_split($content, 800);
+        // Teto deliberado. Em LOG_ERROR a cadeia de loggers do restore passa
+        // por error_log, arquivo e uma linha por INSERT em backup_logs - e,
+        // com debugdisplay ligado, ecoa na tela. Um HTML de 4 MB viraria
+        // milhares de registros, duas vezes. O que interessa e enxergar o
+        // estrago, nao arquivar o documento.
+        $limit = 8192;
+        $truncated = (strlen($content) > $limit);
+        $chunks = str_split(substr($content, 0, $limit), 800);
         $total = count($chunks);
         foreach ($chunks as $i => $chunk) {
             $this->task->get_logger()->process(
                 sprintf('local_resourcelinkfix [%s %d/%d] %s', $label, $i + 1, $total, $chunk),
                 backup::LOG_ERROR);
+        }
+        if ($truncated) {
+            $this->task->get_logger()->process(
+                sprintf('local_resourcelinkfix [%s] ... truncado em %d de %d bytes',
+                    $label, $limit, strlen($content)), backup::LOG_ERROR);
         }
     }
 
@@ -381,12 +522,17 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         // cobrem hifenizacao de texto colado de PDF ('moo- dle'); o limite
         // de 4 e deliberado — com '*' o PCRE recursa uma vez por palavra e
         // um texto longo depois de um 'http://' derruba o processo.
-        $domain = '[a-z0-9.\-]+(?:[ \t]+[a-z0-9.\-]+){0,4}(?::\d+)?';
-        // Subpasta: Moodle instalado em https://site/moodle. Cada segmento
-        // recusa 'mod' e 'course' para nao engolir o caminho que interessa.
-        $subdir = '(?:/(?!mod/|course/view)[a-z0-9_.\-]+){0,8}';
-
-        return '~(?:(https?://[ \t]*' . $domain . $subdir . ')/)?(?<![a-z0-9_])' .
+        // Captura o que estiver COLADO antes do caminho, sem tentar adivinhar
+        // a forma do host. Quem decide e o callback: se o prefixo tiver
+        // indicio de URL absoluta e o host nao puder ser confirmado como o
+        // de origem, nada e alterado.
+        //
+        // Tentar reconhecer o host por regex era o que falhava: cada forma
+        // nao prevista - IPv6, underscore, caminho longo, barra dupla - era
+        // lida como caminho relativo e tinha o id remapeado, apontando para
+        // outro Moodle com um id daqui. O limite de 300 evita backtracking
+        // em sequencia longa sem espaco.
+        return '~([^\s"\'<>]{0,300})(?<![a-z0-9_])' .
                '((mod/[a-z0-9_]+/(view|index|complete)|course/view)\.php\?id=)(\d+)(?!\d)~i';
     }
 
@@ -412,29 +558,32 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         // A partir daqui o padrao e o mesmo usado por only_links_changed().
 
         return preg_replace_callback($pattern, function ($m) {
-            $host = isset($m[1]) ? rtrim($m[1], '/') : '';
-            // Hifen seguido de espaco e hifenizacao de texto ('exam- ple'):
-            // sai junto. Hifen legitimo de dominio ('meu-site') nao e
-            // seguido de espaco, entao fica.
-            $cleanhost = preg_replace('/-[ \t]+/', '', $host);
-            $cleanhost = preg_replace('/[ \t]+/', '', $cleanhost);
+            $prefix = $m[1];
 
-            // Host absoluto de um terceiro site: o id pertence a ele, nao a
-            // este restore. Remapea-lo apontaria para la com um id daqui, que
-            // la e outra atividade. Nao se toca em nada.
-            if ($cleanhost !== '' && strcasecmp($cleanhost, $this->oldwwwroot) !== 0) {
+            // Na duvida, nao mexer. Se ha indicio de URL absoluta e o host
+            // nao pode ser confirmado como o de origem, o link fica como
+            // esta. Um link obsoleto e melhor que um que aponta para outro
+            // Moodle com um id daqui e abre a atividade errada em silencio.
+            if ($this->looks_absolute($prefix) && !$this->is_origin_prefix($prefix)) {
                 return $m[0];
             }
 
             $id = (int)$m[5];
             $new = $this->map_id($m[3], $m[4], $id);
 
-            $prefix = ($host === '') ? '' : $host . '/';
-            if ($host !== '' && $new !== $id) {
-                $prefix = $this->newwwwroot . '/';
+            $output = $prefix . $m[2] . $new;
+            if ($new !== $id && $this->looks_absolute($prefix)) {
+                // Host de origem, id remapeado: a autoridade tambem passa a
+                // ser a deste site. So ela e trocada - o que vier antes no
+                // prefixo ('url(', por exemplo) e preservado.
+                $target = $this->newwwwroot;
+                if (preg_match('~^[ \t]*//~', $prefix)) {
+                    // Sem esquema: a forma e preservada, herda o da pagina.
+                    $target = preg_replace('~^https?:~i', '', $target);
+                }
+                $output = $this->replace_authority($prefix, $target) . $m[2] . $new;
             }
 
-            $output = $prefix . $m[2] . $new;
             if ($output !== $m[0]) {
                 $this->linkcount++;
             }
