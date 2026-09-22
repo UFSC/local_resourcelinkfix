@@ -1,0 +1,29 @@
+# Claude Code — instruções e memória locais, não fazem parte do plugin
+CLAUDE.md
+AGENTS.md
+.claude/
+.claude-*
+
+# Scripts e saídas de teste deste ambiente
+_rlftest/
+*.mbz
+*.log
+
+# Editores
+.idea/
+.vscode/
+*.sublime-*
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Dependências e build (se um dia houver)
+node_modules/
+vendor/
+composer.lock
+
+# Ambiente
+.env
+*.local.php
