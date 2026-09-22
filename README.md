@@ -127,6 +127,19 @@ regra, por `backup_controller`/`restore_controller` em um Moodle 3.0.5. Cada com
 teste próprio, e as regras críticas foram verificadas por mutação — alterando o código de
 propósito para confirmar que o teste fica vermelho.
 
+### Meça a sua instalação
+
+O plugin traz a ferramenta que produziu os números abaixo:
+
+    php local/resourcelinkfix/cli/measure_links.php --js
+
+Ela é somente leitura — nenhum arquivo é alterado — e responde, para o seu acervo, quantos links
+o plugin alcança, quantos escapam e por quê, e se os links dentro de `.js` são literais ou
+montados em tempo de execução. Aceita `--course=ID` para olhar um curso só e `--help` para as
+demais opções.
+
+Use-a **antes** de ligar a opção `.js`: ela diz de antemão o que vai ser tocado.
+
 ### Medição em uma instalação real
 
 Números levantados em uma instalação Moodle 3.0 de porte médio, lendo o conteúdo dos arquivos

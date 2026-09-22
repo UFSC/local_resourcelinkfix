@@ -285,13 +285,45 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * @param string $content
      * @return string
      */
+    /**
+     * O padrao que reconhece um link de atividade ou de curso.
+     *
+     * Publico porque a ferramenta de medicao (cli/measure_links.php) precisa
+     * usar exatamente o mesmo padrao: se os dois divergirem, o relatorio
+     * passa a medir algo diferente do que o plugin faz.
+     *
+     * Grupos: 1 host (opcional), 2 caminho ate '?id=', 3 caminho, 4 script,
+     * 5 id. O host aceita espacos internos porque texto colado de PDF chega
+     * com o dominio quebrado por hifenizacao ('moo- dle', 'https:// site');
+     * sem isso a URL seria lida como caminho relativo e o id de um terceiro
+     * site acabaria remapeado.
+     *
+     * @return string
+     */
+    public static function get_link_pattern() {
+        return '~(?:(https?://[ \t]*[a-z0-9.\-]+(?:[ \t]+[a-z0-9.\-]+)*)/)?(?<![a-z0-9_])' .
+               '((mod/[a-z0-9_]+/(view|index|complete)|course/view)\.php\?id=)(\d+)(?!\d)~i';
+    }
+
+    /**
+     * Troca IDs em uma unica passada, o que evita remapear um ID ja trocado.
+     *
+     * Formas tratadas: mod/xxx/view.php?id=CMID e mod/xxx/complete.php?id=CMID
+     * viram o novo cmid; mod/xxx/index.php?id=CURSO e course/view.php?id=CURSO
+     * viram o novo curso. Links absolutos ou relativos. IDs sem mapeamento
+     * ficam intactos.
+     *
+     * Num backup vindo de outro site, o wwwroot antigo do link absoluto e
+     * trocado pelo deste site, mas so quando o id tambem foi remapeado.
+     * Se a atividade nao veio no backup, o id continua sendo o de la: trocar
+     * o host apontaria para este site com um id alheio, que pode abrir outra
+     * atividade. Mantendo o host antigo, o link segue valido no site de origem.
+     *
+     * @param string $content
+     * @return string
+     */
     protected function rewrite_links($content) {
-        // O host aceita espacos internos: texto colado de PDF chega com o
-        // dominio quebrado por hifenizacao ('moo- dle', 'https:// site').
-        // Sem isso, a URL seria lida como caminho relativo e o id de um
-        // terceiro site acabaria remapeado.
-        $pattern = '~(?:(https?://[ \t]*[a-z0-9.\-]+(?:[ \t]+[a-z0-9.\-]+)*)/)?(?<![a-z0-9_])' .
-                   '((mod/[a-z0-9_]+/(view|index|complete)|course/view)\.php\?id=)(\d+)(?!\d)~i';
+        $pattern = self::get_link_pattern();
 
         return preg_replace_callback($pattern, function ($m) {
             $host = isset($m[1]) ? rtrim($m[1], '/') : '';
