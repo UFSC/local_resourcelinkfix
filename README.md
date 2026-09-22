@@ -155,6 +155,28 @@ o material. Repita a medição na sua instalação antes de tirar conclusões.
 - [x] `.js` desligado: arquivo intacto; ligado: reescrito
 - [x] Em `.js`, concatenação e template literal nunca são alterados
 
+## Testes
+
+A suíte é autocontida: não depende de script, container ou estrutura de diretórios de quem a
+executa. Em qualquer instalação com o ambiente de testes do Moodle preparado:
+
+    php admin/tool/phpunit/cli/init.php
+    vendor/bin/phpunit --testsuite local_resourcelinkfix_testsuite
+
+| Arquivo | Cobre |
+|---|---|
+| `tests/rewrite_links_test.php` | A reescrita: cmid, curso, `complete.php`, host de origem, terceiro site, host quebrado por hifenização, literal x montado em `.js` |
+| `tests/file_selection_test.php` | Quais arquivos entram, e o papel da opção `.js` |
+| `tests/restore_test.php` | Integração: backup e restore reais, em curso novo e em curso existente |
+
+`tests/fixtures/testable_plugin.php` é uma subclasse que substitui o construtor — a classe real
+só é instanciada pelo Moodle no meio de um restore — e expõe os métodos internos, evitando
+Reflection.
+
+Os testes de integração são os que importam para o ponto central do plugin: trocar o hook de
+`/module` para `/course` mantém todos os testes unitários verdes e derruba quatro dos de
+integração. O bug que motivou este plugin só aparece num restore de verdade.
+
 ## Padrão de código
 
 Segue o [Moodle Coding Style](https://moodledev.io/general/development/policies/codingstyle):

@@ -9,6 +9,11 @@ _rlftest/
 *.mbz
 *.log
 
+# Harness local de teste: depende da estrutura de quem roda, nao do plugin.
+# Os testes em tests/ sao autocontidos e rodam em qualquer instalacao.
+run_tests.sh
+run_behat.sh
+
 # Editores
 .idea/
 .vscode/
