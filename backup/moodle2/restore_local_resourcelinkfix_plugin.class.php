@@ -17,9 +17,9 @@
 /**
  * Restore plugin for local_resourcelinkfix.
  *
- * Reescreve, no restore, os links para atividades dentro dos arquivos HTML
- * de recursos (mod_resource), usando o mapeamento de IDs do proprio restore.
- * Compativel com PHP 5.4+ / Moodle 3.0+.
+ * During restore, rewrites the links to activities inside the HTML files of
+ * resources (mod_resource), using the restore's own id mapping.
+ * Compatible with PHP 5.4+ / Moodle 3.0+.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -27,7 +27,7 @@
  */
 
 /**
- * Reescreve os links para atividades nos HTML de mod_resource durante o restore.
+ * Rewrites the links to activities in mod_resource HTML during restore.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -35,50 +35,50 @@
  */
 class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     /**
-     * Mapa cmid antigo => novo por restore, compartilhado entre as instancias
-     * do plugin (ha uma por atividade restaurada).
+     * Old => new cmid map per restore, shared between the plugin instances
+     * (there is one per restored activity).
      *
      * @var array restoreid => array
      */
     protected static $cmmaps = [];
 
-    /** @var array Cmid antigo => cmid novo do restore corrente. */
+    /** @var array Old cmid => new cmid of the current restore. */
     protected $cmmap = [];
 
-    /** @var int Id do curso no site de origem. */
+    /** @var int Course id on the source site. */
     protected $oldcourseid = 0;
 
-    /** @var int Id do curso restaurado aqui. */
+    /** @var int Id of the course restored here. */
     protected $newcourseid = 0;
 
-    /** @var string Wwwroot do site onde o backup foi feito. */
+    /** @var string Wwwroot of the site where the backup was made. */
     protected $oldwwwroot = '';
 
-    /** @var string Wwwroot deste site. */
+    /** @var string Wwwroot of this site. */
     protected $newwwwroot = '';
 
-    /** @var bool Modo simulacao: mede e registra, nao grava. */
+    /** @var bool Simulation mode: measures and logs, does not write. */
     protected $dryrun = false;
 
-    /** @var int Links trocados no arquivo corrente. */
+    /** @var int Links replaced in the current file. */
     protected $linkcount = 0;
 
-    /** @var bool Reescrever tambem arquivos .js. */
+    /** @var bool Also rewrite .js files. */
     protected $rewritejs = false;
 
     /**
-     * Conexao no ponto /module, e nao em /course.
+     * Hooks into the /module path, not /course.
      *
-     * restore_course_task::build() so adiciona o restore_course_structure_step
-     * (onde fica o ponto /course) quando o alvo e curso novo ou quando
-     * 'overwrite_conf' esta ligado. Logo, um after_restore_course() nunca
-     * roda ao restaurar em curso existente nem ao importar atividades.
-     * Ja o restore_module_structure_step e incondicional
-     * (restore_activity_task::build()), desde que 'activities' esteja ligado.
+     * restore_course_task::build() only adds restore_course_structure_step
+     * (where the /course path lives) when the target is a new course or when
+     * 'overwrite_conf' is on. So an after_restore_course() never runs when
+     * restoring into an existing course or importing activities.
+     * restore_module_structure_step, on the other hand, is unconditional
+     * (restore_activity_task::build()), as long as 'activities' is on.
      *
-     * O path nao existe no module.xml: o que interessa e registrar o
-     * processing object, porque launch_after_restore_methods() itera sobre
-     * os path elements do step.
+     * The path does not exist in module.xml: what matters is registering the
+     * processing object, because launch_after_restore_methods() iterates over
+     * the step's path elements.
      *
      * @return restore_path_element[]
      */
@@ -92,19 +92,19 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * Nunca chamado (o path nao existe no backup), mas precisa existir:
-     * restore_path_element exige o metodo no processing object.
+     * Never called (the path does not exist in the backup), but it must exist:
+     * restore_path_element requires the method on the processing object.
      *
      * @param array|stdClass $data
      */
     public function process_local_resourcelinkfix_module($data) {
-        // Nada a restaurar.
+        // Nothing to restore.
     }
 
     /**
-     * Executado pelo passo 'executing_after_restore' da restore_final_task,
-     * uma vez por atividade restaurada, depois de todas as atividades e antes
-     * de 'drop_and_clean_temp_stuff'. A backup_ids_temp ainda esta disponivel.
+     * Run by the 'executing_after_restore' step of restore_final_task, once
+     * per restored activity, after all activities and before
+     * 'drop_and_clean_temp_stuff'. backup_ids_temp is still available.
      */
     public function after_restore_module() {
         global $CFG;
@@ -113,9 +113,9 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             return;
         }
 
-        // Desligado: o restore se comporta como se o plugin nao existisse.
-        // get_config() devolve false quando a configuracao nunca foi gravada.
-        // Nesse caso vale o padrao do settings.php, que e ligado.
+        // Disabled: restore behaves as if the plugin did not exist.
+        // get_config() returns false when the setting was never saved.
+        // Then the settings.php default applies, which is on.
         $enabled = get_config('local_resourcelinkfix', 'enabled');
         if ($enabled !== false && !$enabled) {
             return;
@@ -126,9 +126,9 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         $this->newcourseid = (int)$this->task->get_courseid();
         $this->oldcourseid = (int)$this->task->get_old_courseid();
 
-        // Backup vindo de outro site: os links absolutos carregam o wwwroot de
-        // la. O core troca isso nos campos de texto (restore_decode_processor),
-        // mas nunca no conteudo de arquivo.
+        // Backup from another site: absolute links carry that site's wwwroot.
+        // Core replaces it in text fields (restore_decode_processor), but
+        // never in file content.
         $info = $this->task->get_info();
         $this->oldwwwroot = isset($info->original_wwwroot)
             ? rtrim($info->original_wwwroot, '/') : '';
@@ -151,16 +151,16 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             if (!$this->should_process_file($file->get_filename())) {
                 continue;
             }
-            // Alias ou arquivo externo: o conteudo pertence a outro lugar.
+            // Alias or external file: the content belongs elsewhere.
             if ($file->is_external_file()) {
                 continue;
             }
             try {
                 $this->rewrite_file($fs, $file);
             } catch (Exception $e) {
-                // Um arquivo problematico nao pode abortar o restore inteiro.
+                // One problematic file must not abort the whole restore.
                 $this->task->get_logger()->process(
-                    'local_resourcelinkfix: falha ao reescrever ' .
+                    'local_resourcelinkfix: failed to rewrite ' .
                     $file->get_filepath() . $file->get_filename() .
                     ' (cmid ' . $cmid . '): ' . $e->getMessage(),
                     backup::LOG_WARNING
@@ -170,11 +170,10 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * Decide se um arquivo da area content entra na reescrita.
+     * Decides whether a file in the content area is rewritten.
      *
-     * HTML sempre. Arquivos .js so quando a configuracao estiver ligada:
-     * .js e codigo, e um erro ali quebra a navegacao inteira do recurso,
-     * nao um link.
+     * HTML always. .js files only when the setting is on: .js is code, and a
+     * mistake there breaks the resource's whole navigation, not one link.
      *
      * @param string $filename
      * @return bool
@@ -187,11 +186,11 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * Mapa cmid antigo => novo do restore corrente, lido uma unica vez.
+     * Old => new cmid map of the current restore, read only once.
      *
-     * newitemid e NOT NULL DEFAULT 0: modulos que nao foram restaurados por
-     * completo ficam com 0. Mapea-los reescreveria o link para '?id=0',
-     * trocando um link obsoleto por um link quebrado.
+     * newitemid is NOT NULL DEFAULT 0: modules that were not fully restored
+     * keep 0. Mapping them would rewrite the link to '?id=0', trading a stale
+     * link for a broken one.
      *
      * @return array
      */
@@ -220,10 +219,10 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * O prefixo colado antes do caminho indica uma URL absoluta?
+     * Does the prefix glued before the path indicate an absolute URL?
      *
-     * Tres perguntas que nao dependem de prever a forma do host, e por isso
-     * nao deixam passar forma nova de URL.
+     * Three questions that do not depend on predicting the host's shape, and
+     * so let no new URL form slip through.
      *
      * @param string $prefix
      * @return bool
@@ -238,29 +237,29 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         if (strpos($prefix, '@') !== false) {
             return true;
         }
-        // Ultimo segmento parece dominio ('ple.com/'). Cobre o caso do host
-        // partido por hifenizacao, em que o '://' ficou para tras do espaco
-        // e nao entrou no prefixo. Na duvida, tratar como absoluto: o custo
-        // de errar para este lado e so deixar de corrigir um link.
+        // The last segment looks like a domain ('ple.com/'). Covers the host
+        // split by hyphenation, where the '://' was left behind the space and
+        // did not enter the prefix. When in doubt, treat it as absolute: the
+        // cost of erring this way is only not fixing one link.
         return (bool)preg_match('~\.[a-z]{2,}(?::\d+)?/?$~i', $prefix);
     }
 
     /**
-     * Reduz um prefixo a uma forma comparavel: sem esquema, sem espacos de
-     * hifenizacao, sem credencial, sem o lixo que vier antes da URL.
+     * Reduces a prefix to a comparable form: no scheme, no hyphenation
+     * spaces, no credentials, no junk before the URL.
      *
-     * Comparar a BASE inteira, e nao so o host, e o que permite reconhecer
-     * um Moodle instalado em subpasta - onde o wwwroot e 'site/moodle'.
+     * Comparing the whole BASE, not just the host, is what recognises a
+     * Moodle installed in a subfolder - where the wwwroot is 'site/moodle'.
      *
      * @param string $prefix
-     * @return string|null Null quando nao ha base legivel.
+     * @return string|null Null when there is no readable base.
      */
     protected function normalize_base($prefix) {
-        // Hifenizacao de texto colado de PDF: 'moo- dle', 'https:// site'.
+        // Hyphenation in text pasted from a PDF: 'moo- dle', 'https:// site'.
         $clean = preg_replace('/-[ \t]+/', '', $prefix);
         $clean = preg_replace('/[ \t]+/', '', $clean);
 
-        // Corta o que vier antes da URL: 'url(', 'href=', texto.
+        // Cuts whatever comes before the URL: 'url(', 'href=', text.
         $pos = strrpos($clean, '://');
         if ($pos !== false) {
             $start = $pos;
@@ -270,20 +269,20 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             $clean = substr($clean, $start);
         }
 
-        // Tira o esquema e a marca de autoridade, se houver.
+        // Strips the scheme and the authority mark, if any.
         $clean = preg_replace('~^[a-z][a-z0-9+.\-]*:~i', '', $clean);
         $clean = preg_replace('~^//~', '', $clean);
-        // Credencial nao faz parte da identidade do site.
+        // Credentials are not part of the site's identity.
         $clean = preg_replace('~^[^/@]*@~', '', $clean);
 
         return ($clean === '') ? null : $clean;
     }
 
     /**
-     * O prefixo aponta para o site onde o backup foi feito?
+     * Does the prefix point to the site where the backup was made?
      *
-     * A comparacao e por inicio de string, com a barra final incluida, de
-     * modo que 'origem.org.outro.com/' nao passe por 'origem.org/'.
+     * The comparison is by string start, with the trailing slash included, so
+     * that 'origem.org.outro.com/' does not pass for 'origem.org/'.
      *
      * @param string $prefix
      * @return bool
@@ -293,10 +292,10 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             return false;
         }
 
-        // Sem a marca de autoridade no prefixo nao da para afirmar que a URL
-        // foi lida inteira: pode haver um esquema antes, cortado por espaco
-        // de hifenizacao. Afirmar origem nesse caso produziria um endereco
-        // com dois esquemas colados.
+        // Without the authority mark in the prefix there is no telling the URL
+        // was read whole: a scheme may come before it, cut off by a
+        // hyphenation space. Claiming the source here would produce an address
+        // with two schemes glued together.
         if (strpos(preg_replace('/[ \t]+/', '', $prefix), '//') === false) {
             return false;
         }
@@ -310,29 +309,29 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * Troca a autoridade (esquema + host) dentro do prefixo, preservando o
-     * que vier antes e o caminho intermediario.
+     * Replaces the authority (scheme + host) inside the prefix, keeping what
+     * comes before it and the intermediate path.
      *
      * @param string $prefix
-     * @param string $target Novo wwwroot.
+     * @param string $target New wwwroot.
      * @return string
      */
     protected function replace_authority($prefix, $target) {
-        // Da autoridade ate o fim do prefixo, tolerando a hifenizacao.
+        // From the authority to the end of the prefix, tolerating hyphenation.
         $pattern = '~(?:[a-z][a-z0-9+.\-]*:)?[ \t]*//.*$~i';
         if (preg_match($pattern, $prefix)) {
             return preg_replace($pattern, $target . '/', $prefix, 1);
         }
-        // Host partido sem '//' visivel no prefixo: substitui o trecho final
-        // que parece dominio.
+        // Split host with no '//' visible in the prefix: replaces the trailing
+        // part that looks like a domain.
         return preg_replace('~[^\s/]*\.[a-z]{2,}(?::\d+)?/?$~i', $target . '/', $prefix, 1);
     }
 
     /**
-     * O host e o do site onde o backup foi feito?
+     * Is the host that of the site where the backup was made?
      *
-     * URL sem esquema herda o esquema da pagina, entao a comparacao ignora
-     * o esquema dos dois lados nesse caso.
+     * A scheme-less URL inherits the page's scheme, so the comparison ignores
+     * the scheme on both sides in that case.
      *
      * @param string $host
      * @return bool
@@ -349,20 +348,20 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * Trava de seguranca: o conteudo novo difere do antigo SO nos links?
+     * Safety guard: does the new content differ from the old ONLY in the links?
      *
-     * Substitui cada link por um marcador fixo nos dois textos e compara o
-     * que sobra. Se o resto nao for identico, alguma coisa fora dos links
-     * mudou - texto perdido, arquivo truncado, regex que engoliu demais - e
-     * a reescrita daquele arquivo e abandonada.
+     * Replaces each link with a fixed marker in both texts and compares what
+     * remains. If the rest is not identical, something outside the links
+     * changed - lost text, a truncated file, a regex that swallowed too much -
+     * and rewriting that file is abandoned.
      *
-     * A alternativa seria confiar no regex. Um retorno nulo do PCRE ou um
-     * padrao que case mais do que devia grava por cima de material didatico
-     * sem deixar rastro, e o original ja foi substituido.
+     * The alternative would be to trust the regex. A null return from PCRE or
+     * a pattern that matches more than it should overwrites teaching material
+     * without a trace, and the original is already gone.
      *
      * @param string $old
      * @param string $new
-     * @return bool Falso tambem quando nao foi possivel verificar.
+     * @return bool False also when the check could not be made.
      */
     protected function only_links_changed($old, $new) {
         $marker = "\x00" . 'RLFLINK' . "\x00";
@@ -371,7 +370,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         $maskedold = preg_replace($pattern, $marker, $old);
         $maskednew = preg_replace($pattern, $marker, $new);
 
-        // Sem mascara confiavel nao ha verificacao: nega por seguranca.
+        // Without a reliable mask there is no check: say no, to be safe.
         if ($maskedold === null || $maskednew === null) {
             return false;
         }
@@ -379,21 +378,21 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * Joga um conteudo no log do restore, em pedacos.
+     * Writes content to the restore log, in chunks.
      *
-     * O logger de restore nao foi feito para texto longo, entao a saida vai
-     * fatiada e com rotulo. O objetivo e permitir reconstruir o que teria
-     * sido perdido, nao produzir um diff legivel.
+     * The restore logger was not built for long text, so the output goes out
+     * sliced and labelled. The goal is to allow rebuilding what would have
+     * been lost, not to produce a readable diff.
      *
      * @param string $label
      * @param string $content
      */
     protected function log_content($label, $content) {
-        // Teto deliberado. Em LOG_ERROR a cadeia de loggers do restore passa
-        // por error_log, arquivo e uma linha por INSERT em backup_logs - e,
-        // com debugdisplay ligado, ecoa na tela. Um HTML de 4 MB viraria
-        // milhares de registros, duas vezes. O que interessa e enxergar o
-        // estrago, nao arquivar o documento.
+        // Deliberate cap. At LOG_ERROR the restore logger chain goes through
+        // error_log, a file and one INSERT per line in backup_logs - and, with
+        // debugdisplay on, echoes on screen. A 4 MB HTML would become
+        // thousands of records, twice. What matters is seeing the damage, not
+        // archiving the document.
         $limit = 8192;
         $truncated = (strlen($content) > $limit);
         $chunks = str_split(substr($content, 0, $limit), 800);
@@ -407,7 +406,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         if ($truncated) {
             $this->task->get_logger()->process(
                 sprintf(
-                    'local_resourcelinkfix [%s] ... truncado em %d de %d bytes',
+                    'local_resourcelinkfix [%s] ... truncated at %d of %d bytes',
                     $label,
                     $limit,
                     strlen($content)
@@ -418,10 +417,10 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * Regrava o conteudo preservando o registro do arquivo (id, sortorder,
-     * filename, timecreated). replace_file_with() troca so contenthash,
-     * filesize, referencefileid e userid. Por isso o arquivo temporario
-     * e criado com o mesmo userid.
+     * Writes the content back, keeping the file record (id, sortorder,
+     * filename, timecreated). replace_file_with() only replaces contenthash,
+     * filesize, referencefileid and userid. That is why the temporary file is
+     * created with the same userid.
      *
      * @param file_storage $fs
      * @param stored_file $file
@@ -431,10 +430,10 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         $this->linkcount = 0;
         $new = $this->rewrite_links($old);
 
-        // A preg_replace_callback() devolve null quando o PCRE aborta, sem
-        // lancar nada. Tratar isso como "conteudo novo" gravaria vazio por
-        // cima do arquivo, e o original se perderia. A excecao cai no
-        // catch de after_restore_module() e vira aviso no log do restore.
+        // A preg_replace_callback() call returns null when PCRE aborts, without
+        // throwing. Treating that as "new content" would write an empty file
+        // over the original, and it would be lost. The exception lands in the
+        // catch of after_restore_module() and becomes a warning in the restore log.
         if ($new === null) {
             throw new moodle_exception(
                 'errorpcre',
@@ -448,9 +447,9 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             return;
         }
 
-        // Trava: nada alem dos links pode ter mudado. Se mudou, o arquivo
-        // fica como esta e os dois conteudos vao para o log, para que dê
-        // para ver o que se perderia.
+        // Guard: nothing but the links may have changed. If something did, the
+        // file stays as it is and both contents go to the log, so what would be
+        // lost can be seen.
         if (!$this->only_links_changed($old, $new)) {
             $this->task->get_logger()->process(
                 get_string('errorcontentlost', 'local_resourcelinkfix', (object)[
@@ -461,8 +460,8 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
                 ]),
                 backup::LOG_ERROR
             );
-            $this->log_content('ANTES', $old);
-            $this->log_content('DEPOIS', $new);
+            $this->log_content('BEFORE', $old);
+            $this->log_content('AFTER', $new);
             return;
         }
 
@@ -480,12 +479,12 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             backup::LOG_INFO
         );
 
-        // Simulacao: mediu, registrou, nao grava.
+        // Simulation: measured, logged, does not write.
         if ($this->dryrun) {
             return;
         }
 
-        // Restos de uma execucao interrompida.
+        // Leftovers of an interrupted run.
         $existing = $fs->get_file(
             $file->get_contextid(),
             'local_resourcelinkfix',
@@ -514,83 +513,63 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * Troca IDs em uma unica passada, o que evita remapear um ID ja trocado.
+     * The pattern that recognises an activity or course link.
      *
-     * Formas tratadas: mod/xxx/view.php?id=CMID vira o novo cmid;
-     * mod/xxx/index.php?id=CURSO e course/view.php?id=CURSO viram o novo curso.
-     * Links absolutos ou relativos. IDs sem mapeamento ficam intactos.
+     * Public because the measuring tool (cli/measure_links.php) must use
+     * exactly the same pattern: if the two diverge, the report measures
+     * something other than what the plugin does.
      *
-     * Num backup vindo de outro site, o wwwroot antigo do link absoluto e
-     * trocado pelo deste site, mas so quando o id tambem foi remapeado.
-     * Se a atividade nao veio no backup, o id continua sendo o de la: trocar
-     * o host apontaria para este site com um id alheio, que pode abrir outra
-     * atividade. Mantendo o host antigo, o link segue valido no site de origem.
-     *
-     * @param string $content
-     * @return string
-     */
-    /**
-     * O padrao que reconhece um link de atividade ou de curso.
-     *
-     * Publico porque a ferramenta de medicao (cli/measure_links.php) precisa
-     * usar exatamente o mesmo padrao: se os dois divergirem, o relatorio
-     * passa a medir algo diferente do que o plugin faz.
-     *
-     * Grupos: 1 host (opcional), 2 caminho ate '?id=', 3 caminho, 4 script,
-     * 5 id. O host aceita espacos internos porque texto colado de PDF chega
-     * com o dominio quebrado por hifenizacao ('moo- dle', 'https:// site');
-     * sem isso a URL seria lida como caminho relativo e o id de um terceiro
-     * site acabaria remapeado.
+     * Groups: 1 prefix glued before the path (up to 300 characters, no
+     * whitespace, quotes or angle brackets; may be empty), 2 path up to
+     * '?id=', 3 path, 4 script, 5 id.
      *
      * @return string
      */
     public static function get_link_pattern() {
-        // Dominio, com porta opcional. Os fragmentos separados por espaco
-        // cobrem hifenizacao de texto colado de PDF ('moo- dle'); o limite
-        // de 4 e deliberado — com '*' o PCRE recursa uma vez por palavra e
-        // um texto longo depois de um 'http://' derruba o processo.
-        // Captura o que estiver COLADO antes do caminho, sem tentar adivinhar
-        // a forma do host. Quem decide e o callback: se o prefixo tiver
-        // indicio de URL absoluta e o host nao puder ser confirmado como o
-        // de origem, nada e alterado.
+        // Captures whatever is GLUED before the path, without trying to guess
+        // the host's shape. The callback decides: if the prefix hints at an
+        // absolute URL and the host cannot be confirmed as the source's,
+        // nothing changes.
         //
-        // Tentar reconhecer o host por regex era o que falhava: cada forma
-        // nao prevista - IPv6, underscore, caminho longo, barra dupla - era
-        // lida como caminho relativo e tinha o id remapeado, apontando para
-        // outro Moodle com um id daqui. O limite de 300 evita backtracking
-        // em sequencia longa sem espaco.
+        // Recognising the host by regex was what failed: every unforeseen
+        // form - IPv6, underscore, long path, double slash - was read as a
+        // relative path and had its id remapped, pointing to another Moodle
+        // with an id from here. The limit of 300 prevents backtracking on a
+        // long run without spaces.
         return '~([^\s"\'<>]{0,300})(?<![a-z0-9_])' .
                '((mod/[a-z0-9_]+/(view|index|complete)|course/view)\.php\?id=)(\d+)(?!\d)~i';
     }
 
     /**
-     * Troca IDs em uma unica passada, o que evita remapear um ID ja trocado.
+     * Replaces ids in a single pass, which avoids remapping an id already replaced.
      *
-     * Formas tratadas: mod/xxx/view.php?id=CMID e mod/xxx/complete.php?id=CMID
-     * viram o novo cmid; mod/xxx/index.php?id=CURSO e course/view.php?id=CURSO
-     * viram o novo curso. Links absolutos ou relativos. IDs sem mapeamento
-     * ficam intactos.
+     * Forms handled: mod/xxx/view.php?id=CMID and mod/xxx/complete.php?id=CMID
+     * become the new cmid; mod/xxx/index.php?id=COURSE and
+     * course/view.php?id=COURSE become the new course. Absolute or relative
+     * links. Unmapped ids stay untouched.
      *
-     * Num backup vindo de outro site, o wwwroot antigo do link absoluto e
-     * trocado pelo deste site, mas so quando o id tambem foi remapeado.
-     * Se a atividade nao veio no backup, o id continua sendo o de la: trocar
-     * o host apontaria para este site com um id alheio, que pode abrir outra
-     * atividade. Mantendo o host antigo, o link segue valido no site de origem.
+     * In a backup from another site, the old wwwroot of an absolute link is
+     * replaced with this site's, but only when the id was also remapped. If
+     * the activity was not in the backup, the id is still the other site's:
+     * replacing the host would point to this site with a foreign id, which may
+     * open another activity. Keeping the old host, the link stays valid on the
+     * source site.
      *
      * @param string $content
      * @return string
      */
     protected function rewrite_links($content) {
         $pattern = self::get_link_pattern();
-        // A partir daqui o padrao e o mesmo usado por only_links_changed().
+        // From here on the pattern is the same one only_links_changed() uses.
 
         return preg_replace_callback($pattern, function ($m) {
             $prefix = $m[1];
 
-            // Na duvida, nao mexer. Se ha indicio de URL absoluta e o host
-            // nao pode ser confirmado como o de origem, o link fica como
-            // esta. Um link obsoleto e melhor que um que aponta para outro
-            // Moodle com um id daqui e abre a atividade errada em silencio.
+            // When in doubt, leave it alone. If there is a hint of an absolute
+            // URL and the host cannot be confirmed as the source's, the link
+            // stays as it is. A stale link is better than one that points to
+            // another Moodle with an id from here and silently opens the wrong
+            // activity.
             if ($this->looks_absolute($prefix) && !$this->is_origin_prefix($prefix)) {
                 return $m[0];
             }
@@ -600,12 +579,12 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
 
             $output = $prefix . $m[2] . $new;
             if ($new !== $id && $this->looks_absolute($prefix)) {
-                // Host de origem, id remapeado: a autoridade tambem passa a
-                // ser a deste site. So ela e trocada - o que vier antes no
-                // prefixo ('url(', por exemplo) e preservado.
+                // Source host, remapped id: the authority becomes this site's
+                // too. Only it is replaced - whatever comes before it in the
+                // prefix ('url(', for example) is kept.
                 $target = $this->newwwwroot;
                 if (preg_match('~^[ \t]*//~', $prefix)) {
-                    // Sem esquema: a forma e preservada, herda o da pagina.
+                    // No scheme: the form is kept, it inherits the page's.
                     $target = preg_replace('~^https?:~i', '', $target);
                 }
                 $output = $this->replace_authority($prefix, $target) . $m[2] . $new;
@@ -619,15 +598,15 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * Devolve o id de destino de um link.
+     * Returns a link's target id.
      *
-     * @param string $path Trecho do caminho, como 'mod/page/view' ou 'course/view'.
-     * @param string $script Nome do script, 'view' ou 'index'.
-     * @param int $id Id citado no link.
+     * @param string $path Path fragment, such as 'mod/page/view' or 'course/view'.
+     * @param string $script Script name, 'view', 'index' or 'complete'.
+     * @param int $id Id cited in the link.
      * @return int
      */
     protected function map_id($path, $script, $id) {
-        // O index.php de um modulo recebe o id do curso, nao um cmid.
+        // A module's index.php takes the course id, not a cmid.
         $iscourse = (stripos($path, 'course/') === 0) || (strtolower($script) === 'index');
         if ($iscourse) {
             return ($id === $this->oldcourseid) ? $this->newcourseid : $id;

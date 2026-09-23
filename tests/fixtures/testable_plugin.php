@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Subclasse de teste do plugin de restore.
+ * Test subclass of the restore plugin.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -30,12 +30,12 @@ require_once($CFG->dirroot .
     '/local/resourcelinkfix/backup/moodle2/restore_local_resourcelinkfix_plugin.class.php');
 
 /**
- * Expoe a logica de reescrita sem exigir um restore em andamento.
+ * Exposes the rewriting logic without a restore in progress.
  *
- * A classe real so e instanciada pelo Moodle no meio de um restore, com um
- * step e uma task. Aqui o construtor e substituido e o estado e injetado, de
- * modo que a reescrita possa ser exercitada isoladamente. O teste de
- * integracao (restore_test.php) cobre o caminho completo.
+ * Moodle only instantiates the real class in the middle of a restore, with a
+ * step and a task. Here the constructor is replaced and the state injected, so
+ * the rewriting can be exercised on its own. The integration test
+ * (restore_test.php) covers the full path.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -43,24 +43,24 @@ require_once($CFG->dirroot .
  */
 class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfix_plugin {
     /**
-     * Sem chamar o construtor da classe pai, que exige o step do restore.
+     * Skips the parent constructor, which needs the restore step.
      */
     public function __construct() {
-        // Nada a fazer: o estado vem por set_restore_state().
+        // Nothing to do: the state comes through set_restore_state().
     }
 
     /**
-     * Injeta o estado que o plugin normalmente lê da task e da backup_ids_temp.
+     * Injects the state the plugin normally reads from the task and backup_ids_temp.
      *
-     * @param array $state Chaves: cmmap, oldcourseid, newcourseid, oldwwwroot,
+     * @param array $state Keys: cmmap, oldcourseid, newcourseid, oldwwwroot,
      *                     newwwwroot, rewritejs, dryrun.
      */
     public function set_restore_state(array $state) {
-        $permitidas = ['cmmap', 'oldcourseid', 'newcourseid', 'oldwwwroot',
+        $allowed = ['cmmap', 'oldcourseid', 'newcourseid', 'oldwwwroot',
             'newwwwroot', 'rewritejs', 'dryrun'];
-        foreach ($permitidas as $nome) {
-            if (array_key_exists($nome, $state)) {
-                $this->$nome = $state[$nome];
+        foreach ($allowed as $name) {
+            if (array_key_exists($name, $state)) {
+                $this->$name = $state[$name];
             }
         }
     }
@@ -86,7 +86,7 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
     }
 
     /**
-     * Quantos links foram trocados na ultima chamada a rewrite().
+     * How many links the last rewrite() call replaced.
      *
      * @return int
      */
@@ -95,15 +95,15 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
     }
 
     /**
-     * Exercita o caminho de rewrite_file() que decide gravar ou recusar,
-     * sem precisar de um stored_file nem de um restore em andamento.
+     * Exercises the rewrite_file() path that decides to write or refuse,
+     * without a stored_file or a restore in progress.
      *
-     * Devolve o conteudo que seria gravado, ou lanca a mesma excecao que
-     * rewrite_file() lancaria.
+     * Returns the content that would be written, or throws the same exception
+     * rewrite_file() would.
      *
      * @param string $old
-     * @return string|null Null quando nada seria gravado.
-     * @throws moodle_exception Quando o PCRE aborta.
+     * @return string|null Null when nothing would be written.
+     * @throws moodle_exception When PCRE aborts.
      */
     public function rewrite_file_for_test($old) {
         $new = $this->rewrite_links($old);
@@ -126,7 +126,7 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
     }
 
     /**
-     * A trava: o conteudo novo difere do antigo apenas nos links?
+     * The guard: does the new content differ from the old only in the links?
      *
      * @param string $old
      * @param string $new

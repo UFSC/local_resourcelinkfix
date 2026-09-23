@@ -50,3 +50,49 @@ $string['errorpcre'] = 'O motor de expressões regulares desistiu deste arquivo 
 $string['errorcontentlost'] = 'Perda de conteúdo evitada em {$a->file} (cmid {$a->cmid}): a reescrita alterou mais do que os'
     . ' links ({$a->oldsize} bytes antes, {$a->newsize} depois). O arquivo não foi alterado; as duas'
     . ' versões seguem no log.';
+
+$string['cli_covered'] = 'alcançados pelo plugin';
+$string['cli_examples'] = 'exemplos:';
+$string['cli_examplesof'] = 'exemplos, {$a}:';
+$string['cli_help'] = '
+Mede os links de atividade dentro dos recursos do tipo Arquivo (mod_resource) e informa
+quantos o local_resourcelinkfix alcança. Não altera nada.
+
+Serve para decidir, com número em vez de suposição, se vale ligar a opção de reescrever
+arquivos .js, e para saber de antemão o que ficará de fora.
+
+Opções:
+  -h, --help          Mostra esta ajuda.
+  -c, --course=ID     Limita a um curso. Sem isso, varre o site inteiro.
+  -e, --examples=N    Quantos exemplos mostrar de cada caso (padrão 5).
+  -j, --js            Inclui a análise dos arquivos .js.
+
+Exemplos:
+  php local/resourcelinkfix/cli/measure_links.php
+  php local/resourcelinkfix/cli/measure_links.php --js
+  php local/resourcelinkfix/cli/measure_links.php --course=42 --js --examples=10
+';
+$string['cli_hosts'] = 'hosts:';
+$string['cli_htmlfiles'] = 'arquivos HTML distintos';
+$string['cli_htmllinks'] = 'Links em HTML';
+$string['cli_htmlwithlinks'] = 'deles, com algum link';
+$string['cli_idnotfirst'] = 'escapam: id fora da 1ª posição';
+$string['cli_jsbuilt'] = 'montado em tempo de execução';
+$string['cli_jsfiles'] = 'arquivos .js distintos';
+$string['cli_jsheading'] = 'Arquivos .js';
+$string['cli_jsliteral'] = 'URL literal (alcançável)';
+$string['cli_jsnote'] = '  Links em .js só são reescritos com a opção \'Reescrever também arquivos .js\'
+  ligada, e apenas os literais. Meça primeiro com o modo simulação.';
+$string['cli_jsoccurrences'] = 'ocorrências do padrão';
+$string['cli_jsunclassified'] = 'não classificado';
+$string['cli_jswithlinks'] = 'deles, com link de atividade';
+$string['cli_missing'] = '{$a} arquivo(s) sem conteúdo no filedir foram ignorados.
+Isso acontece quando o banco veio de outra instalação sem o moodledata:
+a medição então cobre apenas parte do acervo.';
+$string['cli_otherhost'] = 'preservados: host de outro site';
+$string['cli_otherscript'] = 'escapam: script fora do padrão';
+$string['cli_relative'] = '(relativo)';
+$string['cli_resourcescourse'] = 'Recursos analisados (curso {$a})';
+$string['cli_resourcessite'] = 'Recursos analisados (site inteiro)';
+$string['cli_topscripts'] = 'scripts mais linkados:';
+$string['cli_total'] = 'total';

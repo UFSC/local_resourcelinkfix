@@ -251,12 +251,13 @@ The bug that motivated this plugin only shows up in a real restore.
 
 The reference is the [Moodle Coding Style](https://moodledev.io/general/development/policies/codingstyle):
 English identifiers, 4-space indentation, lines within 132 columns, no closing `?>`, GPL header
-plus a docblock with `@package`/`@copyright`/`@license`, and `defined('MOODLE_INTERNAL')`.
-Comments and `lang/pt_br` are in Portuguese.
+plus a docblock with `@package`/`@copyright`/`@license`, and `defined('MOODLE_INTERNAL')` where
+the file has side effects. Comments are in English too, as the
+[plugin contribution checklist](https://moodledev.io/general/community/plugincontribution/checklist)
+asks; phpcs does not check that, so review does. Text the plugin prints (the CLI tool included)
+comes from `lang/en`, with a `lang/pt_br` translation.
 
 phpcs (with moodle-cs) and PHPDoc are **blocking** in CI: any error or warning fails the job.
-Comments and test method names are still in Portuguese, which phpcs does not detect; a
-translation PR will follow.
 
 Supporting Moodle 3.0 (PHP 5.6) and moodle-cs at once rules out destructuring: `[$a, $b] = …`
 needs PHP 7.1, and moodle-cs forbids `list()`. Use index access (`$a = $pair[0];`) instead.

@@ -15,8 +15,8 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Mede quantos links de atividade existem nos recursos e quantos o plugin
- * alcanca. Somente leitura: nenhum arquivo e alterado.
+ * Measures how many activity links the resources hold and how many the plugin
+ * reaches. Read-only: no file is changed.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -44,24 +44,7 @@ if ($unrecognized) {
 }
 
 if ($options['help']) {
-    echo "
-Mede os links de atividade dentro dos recursos do tipo Arquivo (mod_resource)
-e informa quantos o local_resourcelinkfix alcanca. Nao altera nada.
-
-Serve para decidir, com numero em vez de suposicao, se vale ligar a opcao de
-reescrever arquivos .js, e para saber de antemao o que ficara de fora.
-
-Opcoes:
-  -h, --help          Mostra esta ajuda.
-  -c, --course=ID     Limita a um curso. Sem isso, varre o site inteiro.
-  -e, --examples=N    Quantos exemplos mostrar de cada caso (padrao 5).
-  -j, --js            Inclui a analise dos arquivos .js.
-
-Exemplos:
-  php local/resourcelinkfix/cli/measure_links.php
-  php local/resourcelinkfix/cli/measure_links.php --js
-  php local/resourcelinkfix/cli/measure_links.php --course=42 --js --examples=10
-";
+    echo get_string('cli_help', 'local_resourcelinkfix');
     exit(0);
 }
 
@@ -69,16 +52,16 @@ $courseid = (int)$options['course'];
 $maxexamples = max(0, (int)$options['examples']);
 $withjs = !empty($options['js']);
 
-// O mesmo padrao que o plugin usa para reescrever.
+// The same pattern the plugin uses to rewrite.
 $pattern = restore_local_resourcelinkfix_plugin::get_link_pattern();
-// Padrao largo: qualquer link para um script do Moodle, alcancavel ou nao.
+// Wide pattern: any link to a Moodle script, reachable or not.
 $anylink = '~(?:https?://[a-z0-9.\-]+)?/?((?:mod/[a-z0-9_]+/[a-z0-9_]+|course/view|user/view)\.php)\?([^"\'\s>]*)~i';
 
 /**
- * Devolve os arquivos da area content de mod_resource que interessam.
+ * Returns the relevant files of the mod_resource content area.
  *
- * @param string $like Filtro SQL para o nome do arquivo.
- * @param int $courseid Zero para o site inteiro.
+ * @param string $like SQL filter for the file name.
+ * @param int $courseid Zero for the whole site.
  * @return array
  */
 function local_resourcelinkfix_fetch_files($like, $courseid) {
@@ -101,12 +84,12 @@ function local_resourcelinkfix_fetch_files($like, $courseid) {
 }
 
 /**
- * Le o conteudo, pulando o que estiver repetido ou ausente do filedir.
+ * Reads the contents, skipping what is repeated or missing from the filedir.
  *
  * @param array $records
- * @param array $seen Hashes ja vistos, por referencia.
- * @param int $missing Contador de ausentes, por referencia.
- * @return array contenthash => conteudo
+ * @param array $seen Hashes already seen, by reference.
+ * @param int $missing Count of missing files, by reference.
+ * @return array contenthash => content
  */
 function local_resourcelinkfix_read_contents($records, &$seen, &$missing) {
     $fs = get_file_storage();
@@ -131,7 +114,7 @@ function local_resourcelinkfix_read_contents($records, &$seen, &$missing) {
 }
 
 /**
- * Imprime uma linha de contagem com percentual.
+ * Prints a count line with a percentage.
  *
  * @param string $label
  * @param int $value
@@ -139,17 +122,21 @@ function local_resourcelinkfix_read_contents($records, &$seen, &$missing) {
  */
 function local_resourcelinkfix_line($label, $value, $total) {
     $pct = $total > 0 ? sprintf('  (%5.1f%%)', 100 * $value / $total) : '';
-    printf("  %-42s %7d%s\n", $label, $value, $pct);
+    // Pad by characters, not bytes: printf counts an accented letter twice.
+    $padding = str_repeat(' ', max(0, 42 - core_text::strlen($label)));
+    printf("  %s%s %7d%s\n", $label, $padding, $value, $pct);
 }
 
-// Um controle de hashes por fase: HTML e .js sao contados separadamente.
-// Compartilhar o mesmo array faria um .js de conteudo identico ao de algum
-// .html ser pulado, subestimando a contagem de arquivos.
+// One set of hashes per phase: HTML and .js are counted separately.
+// Sharing the same array would skip a .js whose content matches some .html,
+// undercounting the files.
 $seenhtml = [];
 $seenjs = [];
 $missing = 0;
 
-cli_heading('Recursos analisados' . ($courseid ? " (curso {$courseid})" : ' (site inteiro)'));
+cli_heading($courseid
+    ? get_string('cli_resourcescourse', 'local_resourcelinkfix', $courseid)
+    : get_string('cli_resourcessite', 'local_resourcelinkfix'));
 
 // HTML files.
 $htmlrecords = array_merge(
@@ -166,19 +153,15 @@ $escaped = [];
 $withlinks = 0;
 
 foreach ($htmlfiles as $content) {
-    // O plugin reescreve o arquivo inteiro, nao so os atributos: link em
-    // script inline, em onclick, em url() de CSS ou em texto corrido conta
-    // igual. Medir so href/src reportaria menos do que sera alterado.
-    // O prefixo e ancorado e limitado de proposito. Um '[^\s]*' guloso na
-    // frente faz backtracking quadratico quando o arquivo tem uma sequencia
-    // longa sem espaco - imagem embutida em base64, por exemplo: medido em
-    // 10,5 s para 30 KB, contra 1,3 ms nesta forma.
-    // A ancora acompanha a do plugin ((?<![a-z0-9_])), para nao deixar de
-    // ver link que ele reescreve - atributo sem aspas, apos virgula, etc.
-    // O prefixo absoluto e ancorado e limitado de proposito: um '[^\s]*'
-    // guloso na frente faz backtracking quadratico quando o arquivo tem uma
-    // sequencia longa sem espaco (imagem em base64): 10,5 s para 30 KB,
-    // contra 1,3 ms nesta forma.
+    // The plugin rewrites the whole file, not just attributes: a link in an
+    // inline script, in onclick, in a CSS url() or in running text counts the
+    // same. Measuring only href/src would report less than will be changed.
+    // The absolute prefix is anchored and bounded on purpose: a greedy
+    // '[^\s]*' in front backtracks quadratically when the file has a long run
+    // without spaces (an image embedded in base64): measured at 10.5 s for
+    // 30 KB, against 1.3 ms in this form.
+    // The anchor follows the plugin's ((?<![a-z0-9_])), so as not to miss a
+    // link it rewrites - an unquoted attribute, after a comma, etc.
     if (
         !preg_match_all(
             '~(?:(?:https?:)?//[^\s"\'<>()]{0,400})?(?<![a-z0-9_])'
@@ -198,36 +181,36 @@ foreach ($htmlfiles as $content) {
         $stats['total']++;
         $script = strtolower(ltrim($parts[1], '/'));
         $scripts[$script] = isset($scripts[$script]) ? $scripts[$script] + 1 : 1;
-        // Aceita porta e URL sem esquema, como o padrao do plugin: sem
-        // isso as duas tabelas do mesmo relatorio discordariam.
+        // Accepts a port and scheme-less URLs, like the plugin's pattern:
+        // otherwise the report's two tables would disagree.
         $host = preg_match('~^((?:https?:)?//[^\s/"\'<>]+)/~i', $url, $h)
-            ? strtolower($h[1]) : '(relativo)';
+            ? strtolower($h[1]) : get_string('cli_relative', 'local_resourcelinkfix');
         $hosts[$host] = isset($hosts[$host]) ? $hosts[$host] + 1 : 1;
 
         if (preg_match($pattern, $url, $hit)) {
-            // Casar o padrao nao basta: link absoluto de outro site e
-            // deliberadamente preservado pelo plugin. Contar como coberto
-            // inflaria o percentual com o que nunca sera reescrito.
+            // Matching the pattern is not enough: an absolute link to another
+            // site is deliberately preserved by the plugin. Counting it as
+            // covered would inflate the percentage with what will never be rewritten.
             $linkhost = isset($hit[1]) ? preg_replace('/[ \t]+|-[ \t]+/', '', rtrim($hit[1], '/')) : '';
             if ($linkhost === '' || strcasecmp($linkhost, rtrim($CFG->wwwroot, '/')) === 0) {
                 $stats['covered']++;
             } else {
                 $stats['otherhost']++;
-                if (!isset($escaped['host de outro site'])) {
-                    $escaped['host de outro site'] = [];
+                if (!isset($escaped['otherhost'])) {
+                    $escaped['otherhost'] = [];
                 }
-                if (count($escaped['host de outro site']) < $maxexamples) {
-                    $escaped['host de outro site'][] = $url;
+                if (count($escaped['otherhost']) < $maxexamples) {
+                    $escaped['otherhost'][] = $url;
                 }
             }
             continue;
         }
         if (preg_match('~(^|&|&amp;)id=\d+~i', $parts[2])) {
             $stats['idnotfirst']++;
-            $key = 'id fora da 1a posicao';
+            $key = 'idnotfirst';
         } else {
             $stats['otherscript']++;
-            $key = 'script fora do padrao';
+            $key = 'otherscript';
         }
         if (!isset($escaped[$key])) {
             $escaped[$key] = [];
@@ -241,18 +224,18 @@ foreach ($htmlfiles as $content) {
     }
 }
 
-local_resourcelinkfix_line('arquivos HTML distintos', count($htmlfiles), 0);
-local_resourcelinkfix_line('deles, com algum link', $withlinks, count($htmlfiles));
+local_resourcelinkfix_line(get_string('cli_htmlfiles', 'local_resourcelinkfix'), count($htmlfiles), 0);
+local_resourcelinkfix_line(get_string('cli_htmlwithlinks', 'local_resourcelinkfix'), $withlinks, count($htmlfiles));
 echo "\n";
-cli_heading('Links em HTML');
-local_resourcelinkfix_line('total', $stats['total'], 0);
-local_resourcelinkfix_line('alcancados pelo plugin', $stats['covered'], $stats['total']);
-local_resourcelinkfix_line('preservados: host de outro site', $stats['otherhost'], $stats['total']);
-local_resourcelinkfix_line('escapam: id fora da 1a posicao', $stats['idnotfirst'], $stats['total']);
-local_resourcelinkfix_line('escapam: script fora do padrao', $stats['otherscript'], $stats['total']);
+cli_heading(get_string('cli_htmllinks', 'local_resourcelinkfix'));
+local_resourcelinkfix_line(get_string('cli_total', 'local_resourcelinkfix'), $stats['total'], 0);
+local_resourcelinkfix_line(get_string('cli_covered', 'local_resourcelinkfix'), $stats['covered'], $stats['total']);
+local_resourcelinkfix_line(get_string('cli_otherhost', 'local_resourcelinkfix'), $stats['otherhost'], $stats['total']);
+local_resourcelinkfix_line(get_string('cli_idnotfirst', 'local_resourcelinkfix'), $stats['idnotfirst'], $stats['total']);
+local_resourcelinkfix_line(get_string('cli_otherscript', 'local_resourcelinkfix'), $stats['otherscript'], $stats['total']);
 
 if ($scripts) {
-    echo "\n  scripts mais linkados:\n";
+    echo "\n  " . get_string('cli_topscripts', 'local_resourcelinkfix') . "\n";
     arsort($scripts);
     $shown = 0;
     foreach ($scripts as $name => $count) {
@@ -263,14 +246,14 @@ if ($scripts) {
     }
 }
 if ($hosts) {
-    echo "\n  hosts:\n";
+    echo "\n  " . get_string('cli_hosts', 'local_resourcelinkfix') . "\n";
     arsort($hosts);
     foreach ($hosts as $name => $count) {
         printf("    %7d  %s\n", $count, $name);
     }
 }
 foreach ($escaped as $key => $examples) {
-    echo "\n  exemplos, {$key}:\n";
+    echo "\n  " . get_string('cli_examplesof', 'local_resourcelinkfix', get_string('cli_' . $key, 'local_resourcelinkfix')) . "\n";
     foreach ($examples as $url) {
         echo '    ' . substr($url, 0, 110) . "\n";
     }
@@ -279,14 +262,14 @@ foreach ($escaped as $key => $examples) {
 // JS files.
 if ($withjs) {
     echo "\n";
-    cli_heading('Arquivos .js');
+    cli_heading(get_string('cli_jsheading', 'local_resourcelinkfix'));
 
     $jsrecords = local_resourcelinkfix_fetch_files('%.js', $courseid);
     $jsfiles = local_resourcelinkfix_read_contents($jsrecords, $seenjs, $missing);
 
-    // Literal: a URL inteira, com id numerico, entre aspas.
+    // Literal: the whole URL, with a numeric id, in quotes.
     $literal = '~["\'][^"\']*(?:mod/[a-z0-9_]+/(?:view|index|complete)|course/view)\.php\?id=\d+[^"\']*["\']~i';
-    // Montado: apos 'id=' vem concatenacao, template ou variavel.
+    // Built: after 'id=' comes concatenation, a template or a variable.
     $built = '~(?:mod/[a-z0-9_]+/(?:view|index|complete)|course/view)\.php\?id=(?:["\']\s*[+.]|\$\{|[a-z_$])~i';
     $any = '~(?:mod/[a-z0-9_]+/(?:view|index|complete)|course/view)\.php\?id=~i';
 
@@ -317,30 +300,31 @@ if ($withjs) {
         }
     }
 
-    local_resourcelinkfix_line('arquivos .js distintos', count($jsfiles), 0);
-    local_resourcelinkfix_line('deles, com link de atividade', $jswith, count($jsfiles));
+    local_resourcelinkfix_line(get_string('cli_jsfiles', 'local_resourcelinkfix'), count($jsfiles), 0);
+    local_resourcelinkfix_line(get_string('cli_jswithlinks', 'local_resourcelinkfix'), $jswith, count($jsfiles));
     echo "\n";
-    local_resourcelinkfix_line('ocorrencias do padrao', $jstotal, 0);
-    local_resourcelinkfix_line('URL literal (alcancavel)', $jsliteral, $jstotal);
-    local_resourcelinkfix_line('montado em tempo de execucao', $jsbuilt, $jstotal);
-    local_resourcelinkfix_line('nao classificado', max(0, $jstotal - $jsliteral - $jsbuilt), $jstotal);
+    local_resourcelinkfix_line(get_string('cli_jsoccurrences', 'local_resourcelinkfix'), $jstotal, 0);
+    local_resourcelinkfix_line(get_string('cli_jsliteral', 'local_resourcelinkfix'), $jsliteral, $jstotal);
+    local_resourcelinkfix_line(get_string('cli_jsbuilt', 'local_resourcelinkfix'), $jsbuilt, $jstotal);
+    local_resourcelinkfix_line(
+        get_string('cli_jsunclassified', 'local_resourcelinkfix'),
+        max(0, $jstotal - $jsliteral - $jsbuilt),
+        $jstotal
+    );
 
     if ($jssamples) {
-        echo "\n  exemplos:\n";
+        echo "\n  " . get_string('cli_examples', 'local_resourcelinkfix') . "\n";
         foreach ($jssamples as $sample) {
             echo '    ' . substr($sample, 0, 110) . "\n";
         }
     }
 
-    echo "\n  Links em .js so sao reescritos com a opcao 'Reescrever tambem arquivos .js'\n";
-    echo "  ligada, e apenas os literais. Meca primeiro com o modo simulacao.\n";
+    echo "\n" . get_string('cli_jsnote', 'local_resourcelinkfix') . "\n";
 }
 
 if ($missing) {
     echo "\n";
-    cli_problem("{$missing} arquivo(s) sem conteudo no filedir foram ignorados.\n" .
-        "Isso acontece quando o banco veio de outra instalacao sem o moodledata:\n" .
-        "a medicao entao cobre apenas parte do acervo.");
+    cli_problem(get_string('cli_missing', 'local_resourcelinkfix', $missing));
 }
 
 echo "\n";
