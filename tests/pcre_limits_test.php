@@ -50,15 +50,17 @@ final class pcre_limits_test extends advanced_testcase {
     /**
      * Saves the original limit, so it does not leak into other tests.
      */
-    protected function setUp() {
+    protected function setUp(): void {
+        parent::setUp();
         $this->backtrack = ini_get('pcre.backtrack_limit');
     }
 
     /**
      * Restores the original limit.
      */
-    protected function tearDown() {
+    protected function tearDown(): void {
         ini_set('pcre.backtrack_limit', $this->backtrack);
+        parent::tearDown();
     }
 
     /**
@@ -84,7 +86,7 @@ final class pcre_limits_test extends advanced_testcase {
      * or the next test passes by mistake. Measured in this environment: with
      * backtrack_limit=100 the pattern still completes; from 30 down it aborts.
      */
-    public function test_chosen_limit_really_aborts_pcre() {
+    public function test_chosen_limit_really_aborts_pcre(): void {
         ini_set('pcre.backtrack_limit', '10');
 
         $plugin = $this->plugin();
@@ -100,7 +102,7 @@ final class pcre_limits_test extends advanced_testcase {
      *
      * The null return must not become content: written, it would wipe the file.
      */
-    public function test_rewrite_file_refuses_when_pcre_aborts() {
+    public function test_rewrite_file_refuses_when_pcre_aborts(): void {
         $this->resetAfterTest(true);
         ini_set('pcre.backtrack_limit', '10');
 
@@ -118,7 +120,7 @@ final class pcre_limits_test extends advanced_testcase {
     /**
      * With PCRE aborted, the guard says no: without a mask there is no check.
      */
-    public function test_guard_says_no_when_it_cannot_check() {
+    public function test_guard_says_no_when_it_cannot_check(): void {
         ini_set('pcre.backtrack_limit', '10');
 
         $plugin = $this->plugin();
@@ -149,7 +151,7 @@ final class pcre_limits_test extends advanced_testcase {
      * content, against a few milliseconds in the anchored form. Across a
      * collection with many such files, the difference is seconds versus hours.
      */
-    public function test_run_without_spaces_does_not_blow_up() {
+    public function test_run_without_spaces_does_not_blow_up(): void {
         $plugin = $this->plugin();
         $base64 = str_repeat('AAAABBBBCCCCDDDD1234567890abcdefGHIJKL', 800);
         $content = '<img src="data:image/png;base64,' . $base64 . '">'
@@ -171,7 +173,7 @@ final class pcre_limits_test extends advanced_testcase {
      * Long content with many words after an http:// must neither bring the
      * process down nor hit a limit.
      */
-    public function test_long_content_after_scheme_does_not_overflow() {
+    public function test_long_content_after_scheme_does_not_overflow(): void {
         $plugin = $this->plugin();
         $content = '<p>veja em http://exemplo.example.org ' . str_repeat('palavra ', 9000)
             . '</p><a href="../../mod/page/view.php?id=101">link</a>';

@@ -74,7 +74,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * A cmid that came in the backup is replaced by the new one.
      */
-    public function test_backup_cmid_is_replaced() {
+    public function test_backup_cmid_is_replaced(): void {
         $plugin = $this->plugin();
         $this->assertSame(
             '../../mod/page/view.php?id=201',
@@ -89,7 +89,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * A cmid that did not come in the backup stays as it is.
      */
-    public function test_cmid_outside_backup_is_untouched() {
+    public function test_cmid_outside_backup_is_untouched(): void {
         $plugin = $this->plugin();
         $this->assertSame(
             '../../mod/chat/view.php?id=103',
@@ -104,7 +104,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * course/view.php and a module's index.php take the COURSE id.
      */
-    public function test_course_id_is_replaced() {
+    public function test_course_id_is_replaced(): void {
         $plugin = $this->plugin();
         $this->assertSame('/course/view.php?id=77', $plugin->rewrite('/course/view.php?id=42'));
         $this->assertSame('/mod/forum/index.php?id=77', $plugin->rewrite('/mod/forum/index.php?id=42'));
@@ -113,7 +113,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * Another course on the same site is not the restored course.
      */
-    public function test_other_course_id_is_untouched() {
+    public function test_other_course_id_is_untouched(): void {
         $plugin = $this->plugin();
         $this->assertSame('/course/view.php?id=99', $plugin->rewrite('/course/view.php?id=99'));
     }
@@ -121,7 +121,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * complete.php takes a cmid, like view.php.
      */
-    public function test_complete_php_is_treated_as_cmid() {
+    public function test_complete_php_is_treated_as_cmid(): void {
         $plugin = $this->plugin();
         $this->assertSame(
             '../../mod/questionnaire/complete.php?id=201',
@@ -132,7 +132,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * In a backup from another site, the old host goes together with the id.
      */
-    public function test_source_host_is_replaced_with_the_id() {
+    public function test_source_host_is_replaced_with_the_id(): void {
         $plugin = $this->plugin();
         $this->assertSame(
             self::TARGET . '/mod/page/view.php?id=201',
@@ -150,7 +150,7 @@ final class rewrite_links_test extends advanced_testcase {
      * Replacing only the host would point to this site with a foreign id, which
      * here may be another activity.
      */
-    public function test_source_host_stays_when_the_id_does_not_change() {
+    public function test_source_host_stays_when_the_id_does_not_change(): void {
         $plugin = $this->plugin();
         $this->assertSame(
             self::SOURCE . '/mod/chat/view.php?id=103',
@@ -161,7 +161,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * A link to a third site is not touched: that id belongs to it.
      */
-    public function test_third_site_is_not_touched() {
+    public function test_third_site_is_not_touched(): void {
         $plugin = $this->plugin();
         $this->assertSame(
             self::THIRD . '/mod/page/view.php?id=101',
@@ -185,7 +185,7 @@ final class rewrite_links_test extends advanced_testcase {
      *
      * Measured on a real installation: 6 occurrences in 14,628 links.
      */
-    public function test_host_broken_by_hyphenation_is_preserved() {
+    public function test_host_broken_by_hyphenation_is_preserved(): void {
         $plugin = $this->plugin();
         $cases = [
             'space after the scheme' => 'https:// origem.example.org/mod/resource/view.php?id=101',
@@ -200,7 +200,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * A third site with a split host is still a third site.
      */
-    public function test_broken_third_site_is_not_touched() {
+    public function test_broken_third_site_is_not_touched(): void {
         $plugin = $this->plugin();
         $this->assertSame(
             'https://terceiro.exam ple.com/mod/page/view.php?id=101',
@@ -211,7 +211,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * A legitimate hyphen in a domain is not hyphenation.
      */
-    public function test_legitimate_domain_hyphen_is_preserved() {
+    public function test_legitimate_domain_hyphen_is_preserved(): void {
         $plugin = new local_resourcelinkfix_testable_plugin();
         $plugin->set_restore_state([
             'cmmap' => [101 => 201],
@@ -237,7 +237,7 @@ final class rewrite_links_test extends advanced_testcase {
      * /course/. With a subfolder, the URL was read as a relative path and a
      * third site's id ended up remapped.
      */
-    public function test_host_with_subfolder_is_recognised() {
+    public function test_host_with_subfolder_is_recognised(): void {
         $plugin = new local_resourcelinkfix_testable_plugin();
         $plugin->set_restore_state([
             'cmmap' => [101 => 201],
@@ -265,7 +265,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * Host with a non-default port.
      */
-    public function test_host_with_port_is_recognised() {
+    public function test_host_with_port_is_recognised(): void {
         $plugin = new local_resourcelinkfix_testable_plugin();
         $plugin->set_restore_state([
             'cmmap' => [101 => 201],
@@ -291,7 +291,7 @@ final class rewrite_links_test extends advanced_testcase {
      * recognising it, the URL becomes a relative path and a third site's id
      * ends up remapped.
      */
-    public function test_schemeless_url_is_recognised() {
+    public function test_schemeless_url_is_recognised(): void {
         $plugin = $this->plugin();
         // Third site: untouched.
         $this->assertSame(
@@ -313,7 +313,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * A URL with embedded credentials has a host too.
      */
-    public function test_url_with_credentials_is_recognised() {
+    public function test_url_with_credentials_is_recognised(): void {
         $plugin = $this->plugin();
         $this->assertSame(
             'https://u:s@terceiro.example.com/mod/page/view.php?id=101',
@@ -332,7 +332,7 @@ final class rewrite_links_test extends advanced_testcase {
      * The failure must be conservative: preserve, never remap an id that may
      * belong to another site.
      */
-    public function test_unrecognisable_host_does_not_get_id_remapped() {
+    public function test_unrecognisable_host_does_not_get_id_remapped(): void {
         $plugin = $this->plugin();
         $cases = [
             'segment with tilde' => 'https://terceiro.example.com/~prof/moodle/mod/page/view.php?id=101',
@@ -353,7 +353,7 @@ final class rewrite_links_test extends advanced_testcase {
      * source's, it is not touched. The cost of getting it wrong is pointing to
      * another Moodle with an id from here, which silently opens the wrong activity.
      */
-    public function test_unforeseen_url_form_is_preserved() {
+    public function test_unforeseen_url_form_is_preserved(): void {
         $plugin = $this->plugin();
         $cases = [
             'IPv6'                => 'https://[2001:db8::1]/mod/page/view.php?id=101',
@@ -374,7 +374,7 @@ final class rewrite_links_test extends advanced_testcase {
      * Relative paths are still fixed: the inversion must not turn the
      * plugin into one that does nothing.
      */
-    public function test_relative_path_is_still_fixed() {
+    public function test_relative_path_is_still_fixed(): void {
         $plugin = $this->plugin();
         $cases = [
             '../../mod/page/view.php?id=101'   => '../../mod/page/view.php?id=201',
@@ -391,7 +391,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * Loose text before a relative path must not become a host.
      */
-    public function test_text_before_path_does_not_become_host() {
+    public function test_text_before_path_does_not_become_host(): void {
         $plugin = $this->plugin();
         $this->assertSame(
             'veja em https://x.example.org e depois mod/page/view.php?id=201',
@@ -403,7 +403,7 @@ final class rewrite_links_test extends advanced_testcase {
      * A link built at run time is never changed: the number is not in the
      * file, and touching what surrounds it would break the code.
      */
-    public function test_link_built_in_javascript_is_not_changed() {
+    public function test_link_built_in_javascript_is_not_changed(): void {
         $plugin = $this->plugin(true);
         $cases = [
             "var u = 'mod/quiz/view.php?id=' + cmid;",
@@ -420,7 +420,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * A literal URL inside .js is rewritten like any other.
      */
-    public function test_literal_link_in_javascript_is_rewritten() {
+    public function test_literal_link_in_javascript_is_rewritten(): void {
         $plugin = $this->plugin(true);
         $js = "const links = { \"Questoes\": '" . self::SOURCE . "/mod/quiz/view.php?id=101' };";
         $expected = "const links = { \"Questoes\": '" . self::TARGET . "/mod/quiz/view.php?id=201' };";
@@ -433,7 +433,7 @@ final class rewrite_links_test extends advanced_testcase {
      * A form found in real material: the parenthesis does not separate the host
      * from the path, so the link is recognised like any other.
      */
-    public function test_url_in_css_syntax_is_rewritten() {
+    public function test_url_in_css_syntax_is_rewritten(): void {
         $plugin = $this->plugin(true);
         $this->assertSame(
             'background: url(' . self::TARGET . '/mod/resource/view.php?id=201);',
@@ -449,7 +449,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * A single pass: an id already replaced is not remapped again.
      */
-    public function test_replacement_in_a_single_pass() {
+    public function test_replacement_in_a_single_pass(): void {
         $plugin = new local_resourcelinkfix_testable_plugin();
         $plugin->set_restore_state([
             'cmmap' => [10 => 20, 20 => 30],
@@ -462,7 +462,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * Forms the plugin does not reach, on purpose.
      */
-    public function test_forms_out_of_reach() {
+    public function test_forms_out_of_reach(): void {
         $plugin = $this->plugin();
         $cases = [
             // The id is not the first parameter.
@@ -485,7 +485,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * Neighbouring ids are not confused.
      */
-    public function test_longer_or_shorter_id_is_not_confused() {
+    public function test_longer_or_shorter_id_is_not_confused(): void {
         $plugin = $this->plugin();
         $this->assertSame('/mod/page/view.php?id=1011', $plugin->rewrite('/mod/page/view.php?id=1011'));
         $this->assertSame('/mod/page/view.php?id=10', $plugin->rewrite('/mod/page/view.php?id=10'));
@@ -495,7 +495,7 @@ final class rewrite_links_test extends advanced_testcase {
      * Without original_wwwroot there is no way to know the source host:
      * absolute links stay untouched, relative ones are still fixed.
      */
-    public function test_without_source_wwwroot_only_relative_is_fixed() {
+    public function test_without_source_wwwroot_only_relative_is_fixed(): void {
         $plugin = new local_resourcelinkfix_testable_plugin();
         $plugin->set_restore_state([
             'cmmap' => [101 => 201],
@@ -515,7 +515,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * The guard accepts the legitimate change: only the links changed.
      */
-    public function test_guard_accepts_change_only_in_links() {
+    public function test_guard_accepts_change_only_in_links(): void {
         $plugin = $this->plugin();
         $old = '<p>Texto</p><a href="../../mod/page/view.php?id=101">A</a><p>Fim</p>';
         $new = '<p>Texto</p><a href="../../mod/page/view.php?id=201">A</a><p>Fim</p>';
@@ -525,7 +525,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * The guard blocks loss of content around the link.
      */
-    public function test_guard_blocks_text_loss() {
+    public function test_guard_blocks_text_loss(): void {
         $plugin = $this->plugin();
         $old = '<p>Texto</p><a href="../../mod/page/view.php?id=101">A</a><p>Fim</p>';
         $cases = [
@@ -546,7 +546,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * The guard blocks a link that appears or disappears.
      */
-    public function test_guard_blocks_extra_or_missing_link() {
+    public function test_guard_blocks_extra_or_missing_link(): void {
         $plugin = $this->plugin();
         $old = '<a href="../../mod/page/view.php?id=101">A</a>';
         $this->assertFalse($plugin->only_links_differ(
@@ -563,7 +563,7 @@ final class rewrite_links_test extends advanced_testcase {
      * comment saying what happens to it. Without this test, the example starts
      * lying at the first behaviour change.
      */
-    public function test_example_file_matches() {
+    public function test_example_file_matches(): void {
         global $CFG;
 
         $plugin = $this->plugin();
@@ -612,7 +612,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * Content without any link comes out the same.
      */
-    public function test_content_without_links_is_unchanged() {
+    public function test_content_without_links_is_unchanged(): void {
         $plugin = $this->plugin();
         $this->assertSame('', $plugin->rewrite(''));
         $this->assertSame('<p>texto</p>', $plugin->rewrite('<p>texto</p>'));

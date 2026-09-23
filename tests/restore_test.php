@@ -185,7 +185,7 @@ final class restore_test extends advanced_testcase {
     /**
      * Restoring as a new course, the link points to the new cmid.
      */
-    public function test_restore_into_new_course_rewrites_the_link() {
+    public function test_restore_into_new_course_rewrites_the_link(): void {
         $this->resetAfterTest(true);
         $this->setAdminUser();
 
@@ -212,7 +212,7 @@ final class restore_test extends advanced_testcase {
      *
      * This is the case an after_restore_course() would never reach.
      */
-    public function test_restore_into_existing_course_rewrites_the_link() {
+    public function test_restore_into_existing_course_rewrites_the_link(): void {
         $this->resetAfterTest(true);
         $this->setAdminUser();
 
@@ -232,7 +232,7 @@ final class restore_test extends advanced_testcase {
     /**
      * With the setting off, the .js comes out untouched.
      */
-    public function test_js_is_not_touched_by_default() {
+    public function test_js_is_not_touched_by_default(): void {
         $this->resetAfterTest(true);
         $this->setAdminUser();
         set_config('rewritejs', 0, 'local_resourcelinkfix');
@@ -259,7 +259,7 @@ final class restore_test extends advanced_testcase {
     /**
      * With the setting on, the .js is rewritten too.
      */
-    public function test_js_is_rewritten_when_enabled() {
+    public function test_js_is_rewritten_when_enabled(): void {
         $this->resetAfterTest(true);
         $this->setAdminUser();
         set_config('rewritejs', 1, 'local_resourcelinkfix');
@@ -285,7 +285,7 @@ final class restore_test extends advanced_testcase {
      * Disabled, the plugin does nothing: restore behaves as if it did not
      * exist.
      */
-    public function test_disabled_touches_nothing() {
+    public function test_disabled_touches_nothing(): void {
         $this->resetAfterTest(true);
         $this->setAdminUser();
         set_config('enabled', 0, 'local_resourcelinkfix');
@@ -308,7 +308,7 @@ final class restore_test extends advanced_testcase {
     /**
      * The main file is still the main file after the rewrite.
      */
-    public function test_sortorder_is_preserved() {
+    public function test_sortorder_is_preserved(): void {
         global $DB;
 
         $this->resetAfterTest(true);

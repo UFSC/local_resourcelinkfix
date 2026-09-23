@@ -57,7 +57,7 @@ final class file_selection_test extends advanced_testcase {
     /**
      * HTML is always included, whatever the .js setting.
      */
-    public function test_html_is_always_included() {
+    public function test_html_is_always_included(): void {
         foreach ([false, true] as $rewritejs) {
             $plugin = $this->plugin($rewritejs);
             $this->assertTrue($plugin->processes('index.html'));
@@ -70,7 +70,7 @@ final class file_selection_test extends advanced_testcase {
      * .js is only included when the setting is on — and it starts off,
      * because .js is code: a mistake there breaks the resource's navigation.
      */
-    public function test_js_depends_on_the_setting() {
+    public function test_js_depends_on_the_setting(): void {
         $this->assertFalse($this->plugin(false)->processes('moodleface.js'));
         $this->assertTrue($this->plugin(true)->processes('moodleface.js'));
     }
@@ -78,7 +78,7 @@ final class file_selection_test extends advanced_testcase {
     /**
      * Nothing else is ever included, not even with .js on.
      */
-    public function test_other_extensions_are_never_included() {
+    public function test_other_extensions_are_never_included(): void {
         $plugin = $this->plugin(true);
         foreach (['style.css', 'material.pdf', 'dados.json', 'foto.png', 'leiame.txt'] as $name) {
             $this->assertFalse($plugin->processes($name), $name . ' should not be included');
@@ -88,7 +88,7 @@ final class file_selection_test extends advanced_testcase {
     /**
      * With no stored setting, the plugin's default is to leave .js alone.
      */
-    public function test_default_leaves_js_alone() {
+    public function test_default_leaves_js_alone(): void {
         $plugin = new local_resourcelinkfix_testable_plugin();
         $this->assertFalse($plugin->processes('nav.js'));
         $this->assertTrue($plugin->processes('index.html'));
