@@ -352,7 +352,7 @@ final class restore_test extends advanced_testcase {
      *
      * @return array[] [logger level, simulation on, simulation messages, rewrite messages]
      */
-    public static function log_level_provider() {
+    public static function log_level_provider(): array {
         return [
             'simulation, level ERROR' => [backup::LOG_ERROR, 1, 0, 0],
             'simulation, level WARNING (default)' => [backup::LOG_WARNING, 1, 1, 0],
