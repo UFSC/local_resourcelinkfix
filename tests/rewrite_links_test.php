@@ -581,7 +581,7 @@ final class rewrite_links_test extends advanced_testcase {
             '../../mod/questionnaire/complete.php?id=201',
             ] as $expected
         ) {
-            $this->assertContains(
+            $this->assertStringContainsString(
                 'href="' . $expected . '"',
                 $after,
                 'should have been rewritten to: ' . $expected
@@ -601,7 +601,7 @@ final class rewrite_links_test extends advanced_testcase {
             self::SOURCE . '/course/view.php?id=99',
             ] as $expected
         ) {
-            $this->assertContains(
+            $this->assertStringContainsString(
                 'href="' . $expected . '"',
                 $after,
                 'should have been preserved: ' . $expected

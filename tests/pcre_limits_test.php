@@ -161,7 +161,7 @@ final class pcre_limits_test extends advanced_testcase {
         $result = $plugin->rewrite($content);
         $elapsed = microtime(true) - $start;
 
-        $this->assertContains('view.php?id=201', $result);
+        $this->assertStringContainsString('view.php?id=201', $result);
         $this->assertLessThan(
             2.0,
             $elapsed,
@@ -186,6 +186,6 @@ final class pcre_limits_test extends advanced_testcase {
             preg_last_error(),
             'PCRE should not abort: error ' . preg_last_error()
         );
-        $this->assertContains('view.php?id=201', $result);
+        $this->assertStringContainsString('view.php?id=201', $result);
     }
 }
