@@ -1,0 +1,164 @@
+name: Moodle Plugin CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  # Moodle 3.8 (UNASUS3): moodle-plugin-ci 4.x, que exige Moodle 3.8.3+ e PHP 7.4+.
+  # Cobre testes e normas do Moodle (Coding Style, PHPDoc, validacao).
+  moodle38:
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: 'postgres'
+          POSTGRES_HOST_AUTH_METHOD: 'trust'
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 3
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+        with:
+          path: plugin
+          persist-credentials: false
+
+      - name: Setup PHP 7.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          ini-values: max_input_vars=5000, opcache.enable_cli=1
+          coverage: none
+
+      - name: Initialise moodle-plugin-ci
+        run: |
+          composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^4
+          echo "$(cd ci/bin; pwd)" >> "$GITHUB_PATH"
+          echo "$(cd ci/vendor/bin; pwd)" >> "$GITHUB_PATH"
+          sudo locale-gen en_AU.UTF-8
+          echo "NVM_DIR=$HOME/.nvm" >> "$GITHUB_ENV"
+
+      - name: Install moodle-plugin-ci
+        run: moodle-plugin-ci install --plugin ./plugin --db-host=127.0.0.1
+        env:
+          DB: pgsql
+          MOODLE_BRANCH: MOODLE_38_STABLE
+
+      - name: PHP Lint
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phplint
+
+      - name: PHP Mess Detector
+        continue-on-error: true # Mostra os achados sem falhar o job.
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phpmd
+
+      # Coding Style e PHPDoc so avisam, por ora: o codigo ainda tem identificadores
+      # em portugues. Remover o continue-on-error quando o relatorio estiver limpo.
+      - name: Moodle Code Checker
+        continue-on-error: true
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phpcs --max-warnings 0
+
+      - name: Moodle PHPDoc Checker
+        continue-on-error: true
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phpdoc --max-warnings 0
+
+      - name: Validating
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci validate
+
+      - name: Check upgrade savepoints
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci savepoints
+
+      - name: PHPUnit tests
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phpunit --fail-on-warning
+
+      - name: Mark cancelled jobs as failed.
+        if: ${{ cancelled() }}
+        run: exit 1
+
+  # Moodle 3.0 (UNASUS-CP): nenhuma versao do moodle-plugin-ci aceita o 3.0 (o minimo e 3.2),
+  # entao o ambiente e montado a mao e roda so o PHPUnit. As normas ficam com o job do 3.8.
+  moodle30:
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        image: postgres:9.6
+        env:
+          POSTGRES_USER: 'postgres'
+          POSTGRES_HOST_AUTH_METHOD: 'trust'
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 3
+
+    steps:
+      - name: Setup PHP 5.6
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '5.6'
+          extensions: pgsql, zip, gd, intl, xmlrpc, soap
+          ini-values: max_input_vars=5000
+          # Composer 1: o 2.x recusa o "phpunit/dbUnit" do composer.json do 3.0 e, corrigido
+          # isso, cai com segfault ao encerrar no PHP 5.6. O install le as URLs do composer.lock.
+          tools: composer:v1
+          coverage: none
+
+      - name: Check out Moodle 3.0
+        run: git clone --depth 1 --branch MOODLE_30_STABLE https://github.com/moodle/moodle.git moodle
+
+      - name: Check out repository code
+        uses: actions/checkout@v6
+        with:
+          path: moodle/local/resourcelinkfix
+          persist-credentials: false
+
+      - name: Install Moodle dependencies
+        working-directory: moodle
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Write config.php
+        working-directory: moodle
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/moodledata" "$GITHUB_WORKSPACE/phpu_moodledata"
+          cat > config.php <<EOF
+          <?php
+          unset(\$CFG);
+          global \$CFG;
+          \$CFG = new stdClass();
+          \$CFG->dbtype = 'pgsql';
+          \$CFG->dblibrary = 'native';
+          \$CFG->dbhost = '127.0.0.1';
+          \$CFG->dbname = 'postgres';
+          \$CFG->dbuser = 'postgres';
+          \$CFG->dbpass = '';
+          \$CFG->prefix = 'mdl_';
+          \$CFG->dboptions = array();
+          \$CFG->wwwroot = 'http://localhost';
+          \$CFG->dataroot = '$GITHUB_WORKSPACE/moodledata';
+          \$CFG->directorypermissions = 02777;
+          \$CFG->phpunit_prefix = 'phpu_';
+          \$CFG->phpunit_dataroot = '$GITHUB_WORKSPACE/phpu_moodledata';
+          require_once(__DIR__ . '/lib/setup.php');
+          EOF
+
+      # Sem o init.php: no 3.0 ele roda "composer self-update", que traz o Composer 2.x e aborta
+      # no PHP 5.6. As dependencias ja vieram do passo anterior; aqui so o que o init.php faz depois.
+      - name: Initialise PHPUnit
+        working-directory: moodle
+        run: |
+          php admin/tool/phpunit/cli/util.php --install
+          php admin/tool/phpunit/cli/util.php --buildconfig
+
+      - name: PHPUnit tests
+        working-directory: moodle
+        run: vendor/bin/phpunit --testsuite local_resourcelinkfix_testsuite
