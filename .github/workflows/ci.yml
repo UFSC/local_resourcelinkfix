@@ -113,6 +113,9 @@ jobs:
           tools: composer:v1
           coverage: none
 
+      - name: Install locale en_AU.UTF-8
+        run: sudo locale-gen en_AU.UTF-8
+
       - name: Check out Moodle 3.0
         run: git clone --depth 1 --branch MOODLE_30_STABLE https://github.com/moodle/moodle.git moodle
 
