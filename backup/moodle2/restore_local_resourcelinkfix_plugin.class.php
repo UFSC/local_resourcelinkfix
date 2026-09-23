@@ -26,8 +26,6 @@
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Reescreve os links para atividades nos HTML de mod_resource durante o restore.
  *
@@ -36,17 +34,16 @@ defined('MOODLE_INTERNAL') || die();
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
-
     /**
      * Mapa cmid antigo => novo por restore, compartilhado entre as instancias
      * do plugin (ha uma por atividade restaurada).
      *
      * @var array restoreid => array
      */
-    protected static $cmmaps = array();
+    protected static $cmmaps = [];
 
     /** @var array Cmid antigo => cmid novo do restore corrente. */
-    protected $cmmap = array();
+    protected $cmmap = [];
 
     /** @var int Id do curso no site de origem. */
     protected $oldcourseid = 0;
@@ -86,10 +83,12 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * @return restore_path_element[]
      */
     protected function define_module_plugin_structure() {
-        return array(
-            new restore_path_element('local_resourcelinkfix_module',
-                $this->get_pathfor('/resourcelinkfix'))
-        );
+        return [
+            new restore_path_element(
+                'local_resourcelinkfix_module',
+                $this->get_pathfor('/resourcelinkfix')
+            ),
+        ];
     }
 
     /**
@@ -164,7 +163,8 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
                     'local_resourcelinkfix: falha ao reescrever ' .
                     $file->get_filepath() . $file->get_filename() .
                     ' (cmid ' . $cmid . '): ' . $e->getMessage(),
-                    backup::LOG_WARNING);
+                    backup::LOG_WARNING
+                );
             }
         }
     }
@@ -203,10 +203,13 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             return self::$cmmaps[$restoreid];
         }
 
-        $records = $DB->get_records_menu('backup_ids_temp',
-            array('backupid' => $restoreid, 'itemname' => 'course_module'),
-            '', 'itemid, newitemid');
-        $map = array();
+        $records = $DB->get_records_menu(
+            'backup_ids_temp',
+            ['backupid' => $restoreid, 'itemname' => 'course_module'],
+            '',
+            'itemid, newitemid'
+        );
+        $map = [];
         foreach ($records as $oldid => $newid) {
             if ($newid > 0) {
                 $map[(int)$oldid] = (int)$newid;
@@ -398,12 +401,19 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         foreach ($chunks as $i => $chunk) {
             $this->task->get_logger()->process(
                 sprintf('local_resourcelinkfix [%s %d/%d] %s', $label, $i + 1, $total, $chunk),
-                backup::LOG_ERROR);
+                backup::LOG_ERROR
+            );
         }
         if ($truncated) {
             $this->task->get_logger()->process(
-                sprintf('local_resourcelinkfix [%s] ... truncado em %d de %d bytes',
-                    $label, $limit, strlen($content)), backup::LOG_ERROR);
+                sprintf(
+                    'local_resourcelinkfix [%s] ... truncado em %d de %d bytes',
+                    $label,
+                    $limit,
+                    strlen($content)
+                ),
+                backup::LOG_ERROR
+            );
         }
     }
 
@@ -421,13 +431,17 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         $this->linkcount = 0;
         $new = $this->rewrite_links($old);
 
-        // preg_replace_callback() devolve null quando o PCRE aborta, sem
+        // A preg_replace_callback() devolve null quando o PCRE aborta, sem
         // lancar nada. Tratar isso como "conteudo novo" gravaria vazio por
         // cima do arquivo, e o original se perderia. A excecao cai no
         // catch de after_restore_module() e vira aviso no log do restore.
         if ($new === null) {
-            throw new moodle_exception('errorpcre', 'local_resourcelinkfix', '',
-                preg_last_error());
+            throw new moodle_exception(
+                'errorpcre',
+                'local_resourcelinkfix',
+                '',
+                preg_last_error()
+            );
         }
 
         if ($new === $old) {
@@ -439,25 +453,32 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         // para ver o que se perderia.
         if (!$this->only_links_changed($old, $new)) {
             $this->task->get_logger()->process(
-                get_string('errorcontentlost', 'local_resourcelinkfix', (object)array(
+                get_string('errorcontentlost', 'local_resourcelinkfix', (object)[
                     'file' => $file->get_filepath() . $file->get_filename(),
                     'cmid' => (int)$this->task->get_moduleid(),
                     'oldsize' => strlen($old),
                     'newsize' => strlen($new),
-                )), backup::LOG_ERROR);
+                ]),
+                backup::LOG_ERROR
+            );
             $this->log_content('ANTES', $old);
             $this->log_content('DEPOIS', $new);
             return;
         }
 
-        $a = (object)array(
+        $a = (object)[
             'file' => $file->get_filepath() . $file->get_filename(),
             'cmid' => (int)$this->task->get_moduleid(),
             'links' => $this->linkcount,
-        );
+        ];
         $this->task->get_logger()->process(
-            get_string($this->dryrun ? 'logdryrun' : 'logrewritten',
-                'local_resourcelinkfix', $a), backup::LOG_INFO);
+            get_string(
+                $this->dryrun ? 'logdryrun' : 'logrewritten',
+                'local_resourcelinkfix',
+                $a
+            ),
+            backup::LOG_INFO
+        );
 
         // Simulacao: mediu, registrou, nao grava.
         if ($this->dryrun) {
@@ -465,13 +486,19 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         }
 
         // Restos de uma execucao interrompida.
-        $existing = $fs->get_file($file->get_contextid(), 'local_resourcelinkfix',
-            'temp', $file->get_id(), '/', 'rewrite.tmp');
+        $existing = $fs->get_file(
+            $file->get_contextid(),
+            'local_resourcelinkfix',
+            'temp',
+            $file->get_id(),
+            '/',
+            'rewrite.tmp'
+        );
         if ($existing) {
             $existing->delete();
         }
 
-        $tmpfile = $fs->create_file_from_string(array(
+        $tmpfile = $fs->create_file_from_string([
             'contextid' => $file->get_contextid(),
             'component' => 'local_resourcelinkfix',
             'filearea' => 'temp',
@@ -479,7 +506,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             'filepath' => '/',
             'filename' => 'rewrite.tmp',
             'userid' => $file->get_userid(),
-        ), $new);
+        ], $new);
 
         $file->replace_file_with($tmpfile);
         $file->set_timemodified(time());

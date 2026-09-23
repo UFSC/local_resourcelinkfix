@@ -25,26 +25,30 @@
 defined('MOODLE_INTERNAL') || die();
 
 if ($hassiteconfig) {
-
-    $settings = new admin_settingpage('local_resourcelinkfix',
-        get_string('pluginname', 'local_resourcelinkfix'));
+    $settings = new admin_settingpage(
+        'local_resourcelinkfix',
+        get_string('pluginname', 'local_resourcelinkfix')
+    );
     $ADMIN->add('localplugins', $settings);
 
     $settings->add(new admin_setting_configcheckbox(
         'local_resourcelinkfix/enabled',
         get_string('enabled', 'local_resourcelinkfix'),
         get_string('enabled_desc', 'local_resourcelinkfix'),
-        1));
+        1
+    ));
 
     $settings->add(new admin_setting_configcheckbox(
         'local_resourcelinkfix/rewritejs',
         get_string('rewritejs', 'local_resourcelinkfix'),
         get_string('rewritejs_desc', 'local_resourcelinkfix'),
-        0));
+        0
+    ));
 
     $settings->add(new admin_setting_configcheckbox(
         'local_resourcelinkfix/dryrun',
         get_string('dryrun', 'local_resourcelinkfix'),
         get_string('dryrun_desc', 'local_resourcelinkfix'),
-        0));
+        0
+    ));
 }

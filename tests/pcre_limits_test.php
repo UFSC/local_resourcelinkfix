@@ -22,6 +22,12 @@
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+namespace local_resourcelinkfix;
+
+use advanced_testcase;
+use local_resourcelinkfix_testable_plugin;
+use moodle_exception;
+
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
@@ -36,8 +42,7 @@ require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/testable_plu
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @group      local_resourcelinkfix
  */
-class local_resourcelinkfix_pcre_limits_testcase extends advanced_testcase {
-
+class pcre_limits_test extends advanced_testcase {
     /** @var string Valor original de pcre.backtrack_limit. */
     protected $backtrack;
 
@@ -56,16 +61,18 @@ class local_resourcelinkfix_pcre_limits_testcase extends advanced_testcase {
     }
 
     /**
+     * Builds a plugin instance with a fixed restore state.
+     *
      * @return local_resourcelinkfix_testable_plugin
      */
     protected function plugin() {
         $plugin = new local_resourcelinkfix_testable_plugin();
-        $plugin->set_restore_state(array(
-            'cmmap' => array(101 => 201),
+        $plugin->set_restore_state([
+            'cmmap' => [101 => 201],
             'oldcourseid' => 42, 'newcourseid' => 77,
             'oldwwwroot' => 'https://origem.example.org',
             'newwwwroot' => 'https://destino.example.net',
-        ));
+        ]);
         return $plugin;
     }
 
@@ -116,8 +123,10 @@ class local_resourcelinkfix_pcre_limits_testcase extends advanced_testcase {
         $plugin = $this->plugin();
         $pesado = $this->conteudo_pesado();
 
-        $this->assertFalse($plugin->only_links_differ($pesado, $pesado),
-            'sem mascara confiavel a trava tem de negar, mesmo com textos iguais');
+        $this->assertFalse(
+            $plugin->only_links_differ($pesado, $pesado),
+            'sem mascara confiavel a trava tem de negar, mesmo com textos iguais'
+        );
     }
 
     /**
@@ -150,8 +159,11 @@ class local_resourcelinkfix_pcre_limits_testcase extends advanced_testcase {
         $elapsed = microtime(true) - $start;
 
         $this->assertContains('view.php?id=201', $result);
-        $this->assertLessThan(2.0, $elapsed,
-            'a reescrita levou ' . round($elapsed, 2) . ' s: sinal de backtracking');
+        $this->assertLessThan(
+            2.0,
+            $elapsed,
+            'a reescrita levou ' . round($elapsed, 2) . ' s: sinal de backtracking'
+        );
     }
 
     /**
@@ -166,8 +178,11 @@ class local_resourcelinkfix_pcre_limits_testcase extends advanced_testcase {
         $result = $plugin->rewrite($content);
 
         $this->assertNotNull($result);
-        $this->assertSame(0, preg_last_error(),
-            'o PCRE nao deveria abortar: erro ' . preg_last_error());
+        $this->assertSame(
+            0,
+            preg_last_error(),
+            'o PCRE nao deveria abortar: erro ' . preg_last_error()
+        );
         $this->assertContains('view.php?id=201', $result);
     }
 }

@@ -42,7 +42,6 @@ require_once($CFG->dirroot .
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfix_plugin {
-
     /**
      * Sem chamar o construtor da classe pai, que exige o step do restore.
      */
@@ -57,8 +56,8 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
      *                     newwwwroot, rewritejs, dryrun.
      */
     public function set_restore_state(array $state) {
-        $permitidas = array('cmmap', 'oldcourseid', 'newcourseid', 'oldwwwroot',
-            'newwwwroot', 'rewritejs', 'dryrun');
+        $permitidas = ['cmmap', 'oldcourseid', 'newcourseid', 'oldwwwroot',
+            'newwwwroot', 'rewritejs', 'dryrun'];
         foreach ($permitidas as $nome) {
             if (array_key_exists($nome, $state)) {
                 $this->$nome = $state[$nome];
@@ -67,6 +66,8 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
     }
 
     /**
+     * Exposes rewrite_links() to the tests.
+     *
      * @param string $content
      * @return string
      */
@@ -75,6 +76,8 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
     }
 
     /**
+     * Exposes should_process_file() to the tests.
+     *
      * @param string $filename
      * @return bool
      */
@@ -106,8 +109,12 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
         $new = $this->rewrite_links($old);
 
         if ($new === null) {
-            throw new moodle_exception('errorpcre', 'local_resourcelinkfix', '',
-                preg_last_error());
+            throw new moodle_exception(
+                'errorpcre',
+                'local_resourcelinkfix',
+                '',
+                preg_last_error()
+            );
         }
         if ($new === $old) {
             return null;

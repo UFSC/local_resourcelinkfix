@@ -208,8 +208,8 @@ clean Moodle:
 | `leiame` | — | — | `LEIAME.md` matches the current `README.md` (hash on its first line) |
 
 moodle-plugin-ci does not support Moodle before 3.2 (and 4.x, before 3.8.3), so the 3.0 job does
-not use it. The standards checked on 3.8 hold for 3.0: the code is the same. For now phpcs,
-PHPDoc and phpmd only warn, without failing the job.
+not use it. The standards checked on 3.8 hold for 3.0: the code is the same. phpcs and PHPDoc
+are blocking — any finding fails the job; phpmd only warns.
 
 This `README.md` is the source; `LEIAME.md` is its Portuguese translation. When changing this
 file, translate the change there and update the hash on its first line, or the `leiame` job
@@ -254,10 +254,12 @@ English identifiers, 4-space indentation, lines within 132 columns, no closing `
 plus a docblock with `@package`/`@copyright`/`@license`, and `defined('MOODLE_INTERNAL')`.
 Comments and `lang/pt_br` are in Portuguese.
 
-Compliance is not complete yet. On 2026-09-23 CI's phpcs reported **332 errors and 14
-warnings**, almost all formatting (array syntax, wrapping of long calls, indentation); test
-method names are in Portuguese, which phpcs does not detect. A cleanup PR will bring the report
-to zero and make phpcs blocking.
+phpcs (with moodle-cs) and PHPDoc are **blocking** in CI: any error or warning fails the job.
+Comments and test method names are still in Portuguese, which phpcs does not detect; a
+translation PR will follow.
+
+Supporting Moodle 3.0 (PHP 5.6) and moodle-cs at once rules out destructuring: `[$a, $b] = …`
+needs PHP 7.1, and moodle-cs forbids `list()`. Use index access (`$a = $pair[0];`) instead.
 
 ## Limitations
 

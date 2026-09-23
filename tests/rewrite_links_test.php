@@ -22,6 +22,11 @@
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+namespace local_resourcelinkfix;
+
+use advanced_testcase;
+use local_resourcelinkfix_testable_plugin;
+
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
@@ -36,8 +41,7 @@ require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/testable_plu
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @group      local_resourcelinkfix
  */
-class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
-
+class rewrite_links_test extends advanced_testcase {
     /** Site onde o backup foi feito. */
     const ORIGEM = 'https://origem.example.org';
     /** Site onde o curso esta sendo restaurado. */
@@ -55,14 +59,14 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     protected function plugin($rewritejs = false) {
         $plugin = new local_resourcelinkfix_testable_plugin();
-        $plugin->set_restore_state(array(
-            'cmmap' => array(101 => 201, 102 => 202),
+        $plugin->set_restore_state([
+            'cmmap' => [101 => 201, 102 => 202],
             'oldcourseid' => 42,
             'newcourseid' => 77,
             'oldwwwroot' => self::ORIGEM,
             'newwwwroot' => self::DESTINO,
             'rewritejs' => $rewritejs,
-        ));
+        ]);
         return $plugin;
     }
 
@@ -71,10 +75,14 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_cmid_do_backup_e_trocado() {
         $plugin = $this->plugin();
-        $this->assertSame('../../mod/page/view.php?id=201',
-            $plugin->rewrite($ref = '../../mod/page/view.php?id=101'));
-        $this->assertSame('mod/quiz/view.php?id=202',
-            $plugin->rewrite('mod/quiz/view.php?id=102'));
+        $this->assertSame(
+            '../../mod/page/view.php?id=201',
+            $plugin->rewrite($ref = '../../mod/page/view.php?id=101')
+        );
+        $this->assertSame(
+            'mod/quiz/view.php?id=202',
+            $plugin->rewrite('mod/quiz/view.php?id=102')
+        );
     }
 
     /**
@@ -82,10 +90,14 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_cmid_fora_do_backup_fica_intacto() {
         $plugin = $this->plugin();
-        $this->assertSame('../../mod/chat/view.php?id=103',
-            $plugin->rewrite('../../mod/chat/view.php?id=103'));
-        $this->assertSame('../../mod/page/view.php?id=9999',
-            $plugin->rewrite('../../mod/page/view.php?id=9999'));
+        $this->assertSame(
+            '../../mod/chat/view.php?id=103',
+            $plugin->rewrite('../../mod/chat/view.php?id=103')
+        );
+        $this->assertSame(
+            '../../mod/page/view.php?id=9999',
+            $plugin->rewrite('../../mod/page/view.php?id=9999')
+        );
     }
 
     /**
@@ -110,8 +122,10 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_complete_php_e_tratado_como_cmid() {
         $plugin = $this->plugin();
-        $this->assertSame('../../mod/questionnaire/complete.php?id=201',
-            $plugin->rewrite('../../mod/questionnaire/complete.php?id=101'));
+        $this->assertSame(
+            '../../mod/questionnaire/complete.php?id=201',
+            $plugin->rewrite('../../mod/questionnaire/complete.php?id=101')
+        );
     }
 
     /**
@@ -119,10 +133,14 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_host_da_origem_e_trocado_junto_com_o_id() {
         $plugin = $this->plugin();
-        $this->assertSame(self::DESTINO . '/mod/page/view.php?id=201',
-            $plugin->rewrite(self::ORIGEM . '/mod/page/view.php?id=101'));
-        $this->assertSame(self::DESTINO . '/course/view.php?id=77',
-            $plugin->rewrite(self::ORIGEM . '/course/view.php?id=42'));
+        $this->assertSame(
+            self::DESTINO . '/mod/page/view.php?id=201',
+            $plugin->rewrite(self::ORIGEM . '/mod/page/view.php?id=101')
+        );
+        $this->assertSame(
+            self::DESTINO . '/course/view.php?id=77',
+            $plugin->rewrite(self::ORIGEM . '/course/view.php?id=42')
+        );
     }
 
     /**
@@ -133,8 +151,10 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_host_da_origem_fica_quando_o_id_nao_muda() {
         $plugin = $this->plugin();
-        $this->assertSame(self::ORIGEM . '/mod/chat/view.php?id=103',
-            $plugin->rewrite(self::ORIGEM . '/mod/chat/view.php?id=103'));
+        $this->assertSame(
+            self::ORIGEM . '/mod/chat/view.php?id=103',
+            $plugin->rewrite(self::ORIGEM . '/mod/chat/view.php?id=103')
+        );
     }
 
     /**
@@ -142,10 +162,14 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_terceiro_site_nao_e_tocado() {
         $plugin = $this->plugin();
-        $this->assertSame(self::TERCEIRO . '/mod/page/view.php?id=101',
-            $plugin->rewrite(self::TERCEIRO . '/mod/page/view.php?id=101'));
-        $this->assertSame(self::TERCEIRO . '/course/view.php?id=42',
-            $plugin->rewrite(self::TERCEIRO . '/course/view.php?id=42'));
+        $this->assertSame(
+            self::TERCEIRO . '/mod/page/view.php?id=101',
+            $plugin->rewrite(self::TERCEIRO . '/mod/page/view.php?id=101')
+        );
+        $this->assertSame(
+            self::TERCEIRO . '/course/view.php?id=42',
+            $plugin->rewrite(self::TERCEIRO . '/course/view.php?id=42')
+        );
     }
 
     /**
@@ -162,11 +186,11 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_host_quebrado_por_hifenizacao_e_preservado() {
         $plugin = $this->plugin();
-        $casos = array(
+        $casos = [
             'espaco apos o esquema' => 'https:// origem.example.org/mod/resource/view.php?id=101',
             'hifenizacao no meio'   => 'https://origem.exam- ple.org/mod/resource/view.php?id=101',
             'espaco apos o ponto'   => 'https://origem. example.org/mod/resource/view.php?id=101',
-        );
+        ];
         foreach ($casos as $nome => $url) {
             $this->assertSame($url, $plugin->rewrite($url), 'deveria preservar: ' . $nome);
         }
@@ -177,8 +201,10 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_terceiro_site_quebrado_nao_e_tocado() {
         $plugin = $this->plugin();
-        $this->assertSame('https://terceiro.exam ple.com/mod/page/view.php?id=101',
-            $plugin->rewrite('https://terceiro.exam ple.com/mod/page/view.php?id=101'));
+        $this->assertSame(
+            'https://terceiro.exam ple.com/mod/page/view.php?id=101',
+            $plugin->rewrite('https://terceiro.exam ple.com/mod/page/view.php?id=101')
+        );
     }
 
     /**
@@ -186,17 +212,21 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_hifen_legitimo_de_dominio_e_preservado() {
         $plugin = new local_resourcelinkfix_testable_plugin();
-        $plugin->set_restore_state(array(
-            'cmmap' => array(101 => 201),
+        $plugin->set_restore_state([
+            'cmmap' => [101 => 201],
             'oldcourseid' => 42, 'newcourseid' => 77,
             'oldwwwroot' => 'https://meu-site.example.org',
             'newwwwroot' => self::DESTINO,
-        ));
-        $this->assertSame(self::DESTINO . '/mod/page/view.php?id=201',
-            $plugin->rewrite('https://meu-site.example.org/mod/page/view.php?id=101'));
+        ]);
+        $this->assertSame(
+            self::DESTINO . '/mod/page/view.php?id=201',
+            $plugin->rewrite('https://meu-site.example.org/mod/page/view.php?id=101')
+        );
         // Dominio parecido, mas outro.
-        $this->assertSame('https://meu-site2.example.org/mod/page/view.php?id=101',
-            $plugin->rewrite('https://meu-site2.example.org/mod/page/view.php?id=101'));
+        $this->assertSame(
+            'https://meu-site2.example.org/mod/page/view.php?id=101',
+            $plugin->rewrite('https://meu-site2.example.org/mod/page/view.php?id=101')
+        );
     }
 
     /**
@@ -208,21 +238,27 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_host_com_subpasta_e_reconhecido() {
         $plugin = new local_resourcelinkfix_testable_plugin();
-        $plugin->set_restore_state(array(
-            'cmmap' => array(101 => 201),
+        $plugin->set_restore_state([
+            'cmmap' => [101 => 201],
             'oldcourseid' => 42, 'newcourseid' => 77,
             'oldwwwroot' => 'https://origem.example.org/moodle',
             'newwwwroot' => 'https://destino.example.net/ead',
-        ));
+        ]);
         // Site de origem: host e id trocados juntos.
-        $this->assertSame('https://destino.example.net/ead/mod/page/view.php?id=201',
-            $plugin->rewrite('https://origem.example.org/moodle/mod/page/view.php?id=101'));
+        $this->assertSame(
+            'https://destino.example.net/ead/mod/page/view.php?id=201',
+            $plugin->rewrite('https://origem.example.org/moodle/mod/page/view.php?id=101')
+        );
         // Terceiro site com subpasta: nada muda.
-        $this->assertSame('https://outro.example.com/moodle/mod/page/view.php?id=101',
-            $plugin->rewrite('https://outro.example.com/moodle/mod/page/view.php?id=101'));
+        $this->assertSame(
+            'https://outro.example.com/moodle/mod/page/view.php?id=101',
+            $plugin->rewrite('https://outro.example.com/moodle/mod/page/view.php?id=101')
+        );
         // Subpasta de dois niveis.
-        $this->assertSame('https://outro.example.com/lms/moodle/mod/page/view.php?id=101',
-            $plugin->rewrite('https://outro.example.com/lms/moodle/mod/page/view.php?id=101'));
+        $this->assertSame(
+            'https://outro.example.com/lms/moodle/mod/page/view.php?id=101',
+            $plugin->rewrite('https://outro.example.com/lms/moodle/mod/page/view.php?id=101')
+        );
     }
 
     /**
@@ -230,17 +266,21 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_host_com_porta_e_reconhecido() {
         $plugin = new local_resourcelinkfix_testable_plugin();
-        $plugin->set_restore_state(array(
-            'cmmap' => array(101 => 201),
+        $plugin->set_restore_state([
+            'cmmap' => [101 => 201],
             'oldcourseid' => 42, 'newcourseid' => 77,
             'oldwwwroot' => 'http://origem.example.org:8080',
             'newwwwroot' => self::DESTINO,
-        ));
-        $this->assertSame(self::DESTINO . '/mod/page/view.php?id=201',
-            $plugin->rewrite('http://origem.example.org:8080/mod/page/view.php?id=101'));
+        ]);
+        $this->assertSame(
+            self::DESTINO . '/mod/page/view.php?id=201',
+            $plugin->rewrite('http://origem.example.org:8080/mod/page/view.php?id=101')
+        );
         // Terceiro site com porta: intacto.
-        $this->assertSame('http://outro.example.com:8080/mod/page/view.php?id=101',
-            $plugin->rewrite('http://outro.example.com:8080/mod/page/view.php?id=101'));
+        $this->assertSame(
+            'http://outro.example.com:8080/mod/page/view.php?id=101',
+            $plugin->rewrite('http://outro.example.com:8080/mod/page/view.php?id=101')
+        );
     }
 
     /**
@@ -253,14 +293,20 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
     public function test_url_sem_esquema_e_reconhecida() {
         $plugin = $this->plugin();
         // Terceiro site: intacto.
-        $this->assertSame('//terceiro.example.com/mod/page/view.php?id=101',
-            $plugin->rewrite('//terceiro.example.com/mod/page/view.php?id=101'));
-        $this->assertSame('//terceiro.example.com/moodle/mod/page/view.php?id=101',
-            $plugin->rewrite('//terceiro.example.com/moodle/mod/page/view.php?id=101'));
+        $this->assertSame(
+            '//terceiro.example.com/mod/page/view.php?id=101',
+            $plugin->rewrite('//terceiro.example.com/mod/page/view.php?id=101')
+        );
+        $this->assertSame(
+            '//terceiro.example.com/moodle/mod/page/view.php?id=101',
+            $plugin->rewrite('//terceiro.example.com/moodle/mod/page/view.php?id=101')
+        );
         // Site de origem sem esquema: id remapeado, host trocado, e a
         // forma sem esquema e preservada - ela herda o esquema da pagina.
-        $this->assertSame('//destino.example.net/mod/page/view.php?id=201',
-            $plugin->rewrite('//origem.example.org/mod/page/view.php?id=101'));
+        $this->assertSame(
+            '//destino.example.net/mod/page/view.php?id=201',
+            $plugin->rewrite('//origem.example.org/mod/page/view.php?id=101')
+        );
     }
 
     /**
@@ -268,10 +314,14 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_url_com_credencial_e_reconhecida() {
         $plugin = $this->plugin();
-        $this->assertSame('https://u:s@terceiro.example.com/mod/page/view.php?id=101',
-            $plugin->rewrite('https://u:s@terceiro.example.com/mod/page/view.php?id=101'));
-        $this->assertSame('https://prof@terceiro.example.com/mod/page/view.php?id=101',
-            $plugin->rewrite('https://prof@terceiro.example.com/mod/page/view.php?id=101'));
+        $this->assertSame(
+            'https://u:s@terceiro.example.com/mod/page/view.php?id=101',
+            $plugin->rewrite('https://u:s@terceiro.example.com/mod/page/view.php?id=101')
+        );
+        $this->assertSame(
+            'https://prof@terceiro.example.com/mod/page/view.php?id=101',
+            $plugin->rewrite('https://prof@terceiro.example.com/mod/page/view.php?id=101')
+        );
     }
 
     /**
@@ -283,11 +333,11 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_host_irreconhecivel_nao_tem_id_remapeado() {
         $plugin = $this->plugin();
-        $casos = array(
+        $casos = [
             'segmento com til' => 'https://terceiro.example.com/~prof/moodle/mod/page/view.php?id=101',
             'muitos segmentos' => 'https://terceiro.example.com/a/b/c/d/e/f/g/h/i/mod/page/view.php?id=101',
             'porcentagem'      => 'https://terceiro.example.com/a%20b/mod/page/view.php?id=101',
-        );
+        ];
         foreach ($casos as $nome => $url) {
             $this->assertSame($url, $plugin->rewrite($url), 'nao pode remapear: ' . $nome);
         }
@@ -304,7 +354,7 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_forma_de_url_nao_prevista_e_preservada() {
         $plugin = $this->plugin();
-        $casos = array(
+        $casos = [
             'IPv6'                => 'https://[2001:db8::1]/mod/page/view.php?id=101',
             'host com underscore' => 'https://meu_site.example.com/mod/page/view.php?id=101',
             'muitos segmentos'    => 'https://t.example.com/a/b/c/d/e/f/g/h/i/j/k/l/m/mod/page/view.php?id=101',
@@ -313,7 +363,7 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
             'esquema maiusculo'   => 'HTTPS://T.EXAMPLE.COM/mod/page/view.php?id=101',
             'sem esquema'         => '//t.example.com/mod/page/view.php?id=101',
             'com credencial'      => 'https://u:s@t.example.com/mod/page/view.php?id=101',
-        );
+        ];
         foreach ($casos as $nome => $url) {
             $this->assertSame($url, $plugin->rewrite($url), 'nao pode remapear: ' . $nome);
         }
@@ -325,13 +375,13 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_caminho_relativo_continua_sendo_corrigido() {
         $plugin = $this->plugin();
-        $casos = array(
+        $casos = [
             '../../mod/page/view.php?id=101'   => '../../mod/page/view.php?id=201',
             './mod/page/view.php?id=101'       => './mod/page/view.php?id=201',
             '/mod/page/view.php?id=101'        => '/mod/page/view.php?id=201',
             'mod/page/view.php?id=101'         => 'mod/page/view.php?id=201',
             '../mod/quiz/view.php?id=102'      => '../mod/quiz/view.php?id=202',
-        );
+        ];
         foreach ($casos as $entra => $sai) {
             $this->assertSame($sai, $plugin->rewrite($entra), 'deveria corrigir: ' . $entra);
         }
@@ -342,8 +392,10 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_texto_antes_do_caminho_nao_vira_host() {
         $plugin = $this->plugin();
-        $this->assertSame('veja em https://x.example.org e depois mod/page/view.php?id=201',
-            $plugin->rewrite('veja em https://x.example.org e depois mod/page/view.php?id=101'));
+        $this->assertSame(
+            'veja em https://x.example.org e depois mod/page/view.php?id=201',
+            $plugin->rewrite('veja em https://x.example.org e depois mod/page/view.php?id=101')
+        );
     }
 
     /**
@@ -352,12 +404,13 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_link_montado_em_javascript_nao_e_alterado() {
         $plugin = $this->plugin(true);
-        $casos = array(
+        $casos = [
             "var u = 'mod/quiz/view.php?id=' + cmid;",
             'var u = "mod/quiz/view.php?id=" + id;',
+            // phpcs:ignore moodle.Strings.ForbiddenStrings.Found -- A JS template literal is the case under test.
             'var u = `mod/quiz/view.php?id=${cmid}`;',
             'var u = "mod/quiz/view.php?id=" + window.cmid;',
-        );
+        ];
         foreach ($casos as $js) {
             $this->assertSame($js, $plugin->rewrite($js), 'nao pode tocar em: ' . $js);
         }
@@ -383,11 +436,13 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
         $plugin = $this->plugin(true);
         $this->assertSame(
             'background: url(' . self::DESTINO . '/mod/resource/view.php?id=201);',
-            $plugin->rewrite('background: url(' . self::ORIGEM . '/mod/resource/view.php?id=101);'));
+            $plugin->rewrite('background: url(' . self::ORIGEM . '/mod/resource/view.php?id=101);')
+        );
         // De um terceiro site, continua intacta.
         $this->assertSame(
             'background: url(' . self::TERCEIRO . '/mod/resource/view.php?id=101);',
-            $plugin->rewrite('background: url(' . self::TERCEIRO . '/mod/resource/view.php?id=101);'));
+            $plugin->rewrite('background: url(' . self::TERCEIRO . '/mod/resource/view.php?id=101);')
+        );
     }
 
     /**
@@ -395,10 +450,10 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_troca_em_uma_unica_passada() {
         $plugin = new local_resourcelinkfix_testable_plugin();
-        $plugin->set_restore_state(array(
-            'cmmap' => array(10 => 20, 20 => 30),
+        $plugin->set_restore_state([
+            'cmmap' => [10 => 20, 20 => 30],
             'oldcourseid' => 42, 'newcourseid' => 77,
-        ));
+        ]);
         $this->assertSame('/mod/page/view.php?id=20', $plugin->rewrite('/mod/page/view.php?id=10'));
         $this->assertSame('/mod/page/view.php?id=30', $plugin->rewrite('/mod/page/view.php?id=20'));
     }
@@ -408,7 +463,7 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_formas_fora_do_alcance() {
         $plugin = $this->plugin();
-        $casos = array(
+        $casos = [
             // Id nao e o primeiro parametro.
             '/mod/page/view.php?forceview=1&id=101',
             // Script fora do padrao.
@@ -420,7 +475,7 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
             self::ORIGEM . '/pluginfile.php/123/mod_resource/content/0/a.pdf',
             // Prefixo colado.
             '/xmod/page/view.php?id=101',
-        );
+        ];
         foreach ($casos as $url) {
             $this->assertSame($url, $plugin->rewrite($url), 'nao pode tocar em: ' . $url);
         }
@@ -441,15 +496,19 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
      */
     public function test_sem_wwwroot_de_origem_so_o_relativo_e_corrigido() {
         $plugin = new local_resourcelinkfix_testable_plugin();
-        $plugin->set_restore_state(array(
-            'cmmap' => array(101 => 201),
+        $plugin->set_restore_state([
+            'cmmap' => [101 => 201],
             'oldcourseid' => 42, 'newcourseid' => 77,
             'oldwwwroot' => '', 'newwwwroot' => self::DESTINO,
-        ));
-        $this->assertSame(self::ORIGEM . '/mod/page/view.php?id=101',
-            $plugin->rewrite(self::ORIGEM . '/mod/page/view.php?id=101'));
-        $this->assertSame('../../mod/page/view.php?id=201',
-            $plugin->rewrite('../../mod/page/view.php?id=101'));
+        ]);
+        $this->assertSame(
+            self::ORIGEM . '/mod/page/view.php?id=101',
+            $plugin->rewrite(self::ORIGEM . '/mod/page/view.php?id=101')
+        );
+        $this->assertSame(
+            '../../mod/page/view.php?id=201',
+            $plugin->rewrite('../../mod/page/view.php?id=101')
+        );
     }
 
     /**
@@ -468,16 +527,18 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
     public function test_trava_barra_perda_de_texto() {
         $plugin = $this->plugin();
         $old = '<p>Texto</p><a href="../../mod/page/view.php?id=101">A</a><p>Fim</p>';
-        $casos = array(
+        $casos = [
             'texto sumiu'   => '<a href="../../mod/page/view.php?id=201">A</a><p>Fim</p>',
             'fim sumiu'     => '<p>Texto</p><a href="../../mod/page/view.php?id=201">A</a>',
             'tudo vazio'    => '',
             'so o link'     => '../../mod/page/view.php?id=201',
             'texto trocado' => '<p>Outro</p><a href="../../mod/page/view.php?id=201">A</a><p>Fim</p>',
-        );
+        ];
         foreach ($casos as $nome => $new) {
-            $this->assertFalse($plugin->only_links_differ($old, $new),
-                'deveria barrar: ' . $nome);
+            $this->assertFalse(
+                $plugin->only_links_differ($old, $new),
+                'deveria barrar: ' . $nome
+            );
         }
     }
 
@@ -487,8 +548,10 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
     public function test_trava_barra_link_a_mais_ou_a_menos() {
         $plugin = $this->plugin();
         $old = '<a href="../../mod/page/view.php?id=101">A</a>';
-        $this->assertFalse($plugin->only_links_differ($old,
-            '<a href="../../mod/page/view.php?id=201">A</a><a href="../../mod/page/view.php?id=202">B</a>'));
+        $this->assertFalse($plugin->only_links_differ(
+            $old,
+            '<a href="../../mod/page/view.php?id=201">A</a><a href="../../mod/page/view.php?id=202">B</a>'
+        ));
         $this->assertFalse($plugin->only_links_differ($old, '<a href="">A</a>'));
     }
 
@@ -508,19 +571,25 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
         $depois = $plugin->rewrite($antes);
 
         // Prometidos reescritos.
-        foreach (array(
+        foreach (
+            [
             '../../mod/page/view.php?id=201',
             self::DESTINO . '/mod/quiz/view.php?id=202',
             self::DESTINO . '/course/view.php?id=77',
             '../../mod/forum/index.php?id=77',
             '../../mod/questionnaire/complete.php?id=201',
-        ) as $esperado) {
-            $this->assertContains('href="' . $esperado . '"', $depois,
-                'deveria ter sido reescrito para: ' . $esperado);
+            ] as $esperado
+        ) {
+            $this->assertContains(
+                'href="' . $esperado . '"',
+                $depois,
+                'deveria ter sido reescrito para: ' . $esperado
+            );
         }
 
         // Prometidos preservados.
-        foreach (array(
+        foreach (
+            [
             'https://origem.exam- ple.org/mod/page/view.php?id=102',
             self::ORIGEM . '/mod/chat/view.php?id=103',
             self::TERCEIRO . '/mod/page/view.php?id=102',
@@ -529,9 +598,13 @@ class local_resourcelinkfix_rewrite_links_testcase extends advanced_testcase {
             '../../mod/page/view.php?forceview=1&amp;id=101',
             self::ORIGEM . '/pluginfile.php/123/mod_resource/content/0/anexo.pdf',
             self::ORIGEM . '/course/view.php?id=99',
-        ) as $esperado) {
-            $this->assertContains('href="' . $esperado . '"', $depois,
-                'deveria ter sido preservado: ' . $esperado);
+            ] as $esperado
+        ) {
+            $this->assertContains(
+                'href="' . $esperado . '"',
+                $depois,
+                'deveria ter sido preservado: ' . $esperado
+            );
         }
     }
 
