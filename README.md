@@ -209,6 +209,9 @@ clean Moodle. It can also be started by hand
 | `moodle30` | 3.0 | 5.6 | PHPUnit only, with the environment set up by hand |
 | `leiame` | — | — | `LEIAME.md` matches the current `README.md` (hash on its first line) |
 
+The Moodle jobs run twice, once per database: PostgreSQL (13; 9.6 for 3.0) and MySQL (5.6
+for 3.0 and 3.8, 8.0 for 4.1 and 4.5).
+
 moodle-plugin-ci does not support Moodle before 3.2 (and 4.x, before 3.8.3), so the 3.0 job does
 not use it. The standards checked on 3.8 hold for 3.0: the code is the same. phpcs and PHPDoc
 are blocking — any finding fails the job; phpmd only warns.
