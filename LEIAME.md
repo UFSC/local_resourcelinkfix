@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=fa4149d2a80b94c31d1bd882ef4ad01cfd7af5b6f0b07f92accce576b19d8258 -->
+<!-- sync: README.md sha256=6fe26cb932f3ff2d075e395c148cba1a70c2c94a4960207471777d9cc7bc9f79 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -213,6 +213,9 @@ limpo. Também pode ser disparado à mão
 | `moodle-plugin-ci` | 3.8 ou 4.5 | 7.4 ou 8.3 | [moodle-plugin-ci](https://moodlehq.github.io/moodle-plugin-ci/) 4.x: PHPUnit, lint, validação, savepoints, Coding Style (phpcs), PHPDoc e phpmd |
 | `moodle30` | 3.0 | 5.6 | Só PHPUnit, com o ambiente montado à mão |
 | `leiame` | — | — | Este `LEIAME.md` corresponde ao `README.md` atual (hash na primeira linha) |
+
+Os jobs de Moodle rodam duas vezes, uma por banco: PostgreSQL (13; 9.6 no 3.0) e MySQL (5.6
+no 3.0 e no 3.8, 8.0 no 4.1 e no 4.5).
 
 O moodle-plugin-ci não aceita Moodle anterior ao 3.2 (e a 4.x, anterior ao 3.8.3), por isso o
 job do 3.0 não usa a ferramenta. As normas verificadas no 3.8 valem para o 3.0: o código é o
