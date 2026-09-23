@@ -470,13 +470,16 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             'cmid' => (int)$this->task->get_moduleid(),
             'links' => $this->linkcount,
         ];
+        // The simulation is logged as a warning, the level Moodle records by
+        // default: whoever turns it on wants to read the result. The rewrite
+        // report stays at INFO, so a normal restore does not flood the log.
         $this->task->get_logger()->process(
             get_string(
                 $this->dryrun ? 'logdryrun' : 'logrewritten',
                 'local_resourcelinkfix',
                 $a
             ),
-            backup::LOG_INFO
+            $this->dryrun ? backup::LOG_WARNING : backup::LOG_INFO
         );
 
         // Simulation: measured, logged, does not write.

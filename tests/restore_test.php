@@ -117,6 +117,7 @@ final class restore_test extends advanced_testcase {
      * @param string $dir Extracted backup directory.
      * @param int $targetcourseid Target course.
      * @param int $target A backup::TARGET_* constant.
+     * @return string Restore id, the key of this restore's rows in backup_logs.
      */
     protected function restore($dir, $targetcourseid, $target) {
         global $USER;
@@ -131,7 +132,9 @@ final class restore_test extends advanced_testcase {
         );
         $rc->execute_precheck();
         $rc->execute_plan();
+        $restoreid = $rc->get_restoreid();
         $rc->destroy();
+        return $restoreid;
     }
 
     /**
@@ -342,5 +345,69 @@ final class restore_test extends advanced_testcase {
             'index.html'
         );
         $this->assertEquals(1, $file->get_sortorder());
+    }
+
+    /**
+     * Logger level x mode: the six corners of what reaches the restore log.
+     *
+     * @return array[] [logger level, simulation on, simulation messages, rewrite messages]
+     */
+    public static function log_level_provider() {
+        return [
+            'simulation, level ERROR' => [backup::LOG_ERROR, 1, 0, 0],
+            'simulation, level WARNING (default)' => [backup::LOG_WARNING, 1, 1, 0],
+            'simulation, level INFO' => [backup::LOG_INFO, 1, 1, 0],
+            'rewrite, level ERROR' => [backup::LOG_ERROR, 0, 0, 0],
+            'rewrite, level WARNING (default)' => [backup::LOG_WARNING, 0, 0, 0],
+            'rewrite, level INFO' => [backup::LOG_INFO, 0, 0, 1],
+        ];
+    }
+
+    /**
+     * The simulation is visible at Moodle's default log level; the rewrite
+     * report stays at INFO so a normal restore does not flood the log.
+     *
+     * @dataProvider log_level_provider
+     * @param int $level Database logger level, as $CFG->backup_database_logger_level.
+     * @param int $dryrun Simulation mode setting.
+     * @param int $simulation Expected simulation messages.
+     * @param int $rewritten Expected rewrite messages.
+     */
+    public function test_log_level_of_messages($level, $dryrun, $simulation, $rewritten) {
+        global $CFG, $DB;
+
+        $this->resetAfterTest(true);
+        $this->setAdminUser();
+        $CFG->backup_database_logger_level = $level;
+        set_config('dryrun', $dryrun, 'local_resourcelinkfix');
+
+        $source = $this->create_source_course();
+        $course = $source[0];
+        $oldcmid = $source[1];
+        $dir = $this->make_backup($course->id);
+
+        $newcourseid = restore_dbops::create_new_course(
+            'Destino log',
+            'dlog-' . uniqid(),
+            $course->category
+        );
+        $restoreid = $this->restore($dir, $newcourseid, backup::TARGET_NEW_COURSE);
+
+        $count = function ($prefix) use ($DB, $restoreid) {
+            return $DB->count_records_select(
+                'backup_logs',
+                'backupid = ? AND ' . $DB->sql_like('message', '?'),
+                [$restoreid, $DB->sql_like_escape($prefix) . '%']
+            );
+        };
+        $this->assertSame($simulation, $count('local_resourcelinkfix [SIMULATION]:'));
+        $this->assertSame($rewritten, $count('local_resourcelinkfix: '));
+
+        // Simulation writes nothing, whatever the log level.
+        $expected = $dryrun ? $oldcmid : $this->page_cmid($newcourseid);
+        $this->assertSame(
+            1,
+            substr_count($this->file_content($newcourseid, 'index.html'), 'view.php?id=' . $expected . '"')
+        );
     }
 }
