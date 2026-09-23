@@ -187,16 +187,52 @@ o material. Rode `cli/measure_links.php --js` na sua instalação antes de tirar
 ## Testes
 
 A suíte é autocontida: não depende de script, container ou estrutura de diretórios de quem a
-executa. Em qualquer instalação com o ambiente de testes do Moodle preparado:
-
-    php admin/tool/phpunit/cli/init.php
-    vendor/bin/phpunit --testsuite local_resourcelinkfix_testsuite
+executa. Os mesmos 46 testes rodam do Moodle 3.0 ao 3.8.
 
 | Arquivo | Cobre |
 |---|---|
 | `tests/rewrite_links_test.php` | A reescrita: cmid, curso, `complete.php`, host de origem, terceiro site, host quebrado por hifenização, literal x montado em `.js` |
 | `tests/file_selection_test.php` | Quais arquivos entram, e o papel da opção `.js` |
 | `tests/restore_test.php` | Integração: backup e restore reais, em curso novo e em curso existente |
+| `tests/pcre_limits_test.php` | Limites do PCRE: com a regex abortada, o arquivo é recusado e a trava nega; entradas longas não estouram |
+
+### Integração contínua
+
+A cada push e pull request, o GitHub Actions (`.github/workflows/ci.yml`) testa o plugin num
+Moodle limpo, em duas versões:
+
+| Job | Moodle | PHP | O que roda |
+|---|---|---|---|
+| `moodle38` | 3.8 (`MOODLE_38_STABLE`) | 7.4 | [moodle-plugin-ci](https://moodlehq.github.io/moodle-plugin-ci/) 4.x: PHPUnit, lint, validação, savepoints, Coding Style (phpcs), PHPDoc e phpmd |
+| `moodle30` | 3.0 (`MOODLE_30_STABLE`) | 5.6 | Só PHPUnit, com o ambiente montado à mão |
+
+O moodle-plugin-ci não aceita Moodle anterior ao 3.2 (e a 4.x, anterior ao 3.8.3), por isso o
+job do 3.0 não usa a ferramenta. As normas verificadas no 3.8 valem para o 3.0: o código é o
+mesmo. Por ora, phpcs, PHPDoc e phpmd só avisam, sem falhar o job.
+
+### Rodar localmente
+
+**Moodle 3.8 ou posterior**, numa instalação com o ambiente de testes preparado:
+
+    php admin/tool/phpunit/cli/init.php
+    vendor/bin/phpunit --testsuite local_resourcelinkfix_testsuite
+
+Para verificar também as normas, instale o moodle-plugin-ci e rode os mesmos comandos do job
+`moodle38`.
+
+**Moodle 3.0 com PHP 5.6**: o `init.php` não funciona como está. Ele roda
+`composer self-update`, que traz o Composer 2.x e aborta no PHP 5.6. O caminho que o CI usa:
+
+    php composer.phar install        # Composer 1.10: o 2.x recusa o "phpunit/dbUnit" do 3.0
+    php admin/tool/phpunit/cli/util.php --install
+    php admin/tool/phpunit/cli/util.php --buildconfig
+    vendor/bin/phpunit --testsuite local_resourcelinkfix_testsuite
+
+O locale `en_AU.UTF-8` precisa estar instalado (`sudo locale-gen en_AU.UTF-8`), senão o PHPUnit
+do Moodle recusa o ambiente.
+
+Rodar `vendor/bin/phpunit` apontando para o diretório `tests/` não executa nada: o PHPUnit
+procura `*Test.php`, e o Moodle usa `*_test.php`. Use a testsuite.
 
 `tests/fixtures/testable_plugin.php` é uma subclasse que substitui o construtor — a classe real
 só é instanciada pelo Moodle no meio de um restore — e expõe os métodos internos, evitando
@@ -208,10 +244,14 @@ integração. O bug que motivou este plugin só aparece num restore de verdade.
 
 ## Padrão de código
 
-Segue o [Moodle Coding Style](https://moodledev.io/general/development/policies/codingstyle):
+A referência é o [Moodle Coding Style](https://moodledev.io/general/development/policies/codingstyle):
 identificadores em inglês, 4 espaços de indentação, linhas dentro de 132 colunas, sem `?>` final,
 cabeçalho GPL mais docblock com `@package`/`@copyright`/`@license`, e `defined('MOODLE_INTERNAL')`.
 Os comentários e o `lang/pt_br` estão em português.
+
+A conformidade ainda não é completa. O phpcs do CI aponta desvios de formatação (sintaxe de
+array, quebra de chamadas longas, indentação), e os métodos de teste têm nomes em português, o
+que o phpcs não detecta. Quando o relatório estiver limpo, o phpcs passa a falhar o job.
 
 ## Limitações
 
