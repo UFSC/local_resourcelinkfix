@@ -24,9 +24,9 @@
 
 namespace local_resourcelinkfix\privacy;
 
-// Só é carregado no Moodle 3.4+ (Privacy API). Inofensivo no 3.0.
+// Only loaded on Moodle 3.4+ (Privacy API). Harmless on 3.0.
 /**
- * Provider de privacidade: o plugin não armazena dado pessoal algum.
+ * Privacy provider: the plugin stores no personal data.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -34,7 +34,7 @@ namespace local_resourcelinkfix\privacy;
  */
 class provider implements \core_privacy\local\metadata\null_provider {
     /**
-     * Chave da string que explica por que não há dado pessoal.
+     * Key of the string explaining why there is no personal data.
      *
      * @return string
      */

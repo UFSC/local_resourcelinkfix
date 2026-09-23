@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=08265678e5aee8cb8258b4d112a3241eb96f8e6a4a83aa1fda2a33bcea8c8caa -->
+<!-- sync: README.md sha256=0ae081cf0cb1740f6b155df2efeb39bc9f399e676d63199c62c362ecc4cb97e4 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -256,12 +256,14 @@ integração. O bug que motivou este plugin só aparece num restore de verdade.
 
 A referência é o [Moodle Coding Style](https://moodledev.io/general/development/policies/codingstyle):
 identificadores em inglês, 4 espaços de indentação, linhas dentro de 132 colunas, sem `?>` final,
-cabeçalho GPL mais docblock com `@package`/`@copyright`/`@license`, e `defined('MOODLE_INTERNAL')`.
-Os comentários e o `lang/pt_br` estão em português.
+cabeçalho GPL mais docblock com `@package`/`@copyright`/`@license`, e `defined('MOODLE_INTERNAL')`
+onde o arquivo tem efeito colateral. Os comentários também são em inglês, como pede o
+[checklist de contribuição de plugins](https://moodledev.io/general/community/plugincontribution/checklist);
+o phpcs não confere isso, então a revisão confere. O texto que o plugin exibe (inclusive a
+ferramenta de linha de comando) vem de `lang/en`, com tradução em `lang/pt_br`.
 
 O phpcs (com moodle-cs) e o PHPDoc são **bloqueantes** no CI: qualquer erro ou aviso falha o
-job. Os comentários e os nomes dos métodos de teste ainda estão em português, o que o phpcs não
-detecta; um PR de tradução vem em seguida.
+job.
 
 Atender ao Moodle 3.0 (PHP 5.6) e ao moodle-cs ao mesmo tempo impede a desestruturação:
 `[$a, $b] = …` exige PHP 7.1, e o moodle-cs proíbe `list()`. Use acesso por índice

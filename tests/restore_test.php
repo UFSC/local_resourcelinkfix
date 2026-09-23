@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Testes de integracao: backup e restore de verdade.
+ * Integration tests: a real backup and restore.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -38,11 +38,11 @@ require_once($CFG->dirroot . '/backup/util/includes/backup_includes.php');
 require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
 
 /**
- * Exercita o plugin pelo caminho real: um restore completo.
+ * Exercises the plugin along the real path: a complete restore.
  *
- * O ponto de conexao do plugin e /module, e nao /course, porque
- * restore_course_task::build() so adiciona o restore_course_structure_step
- * quando o alvo e curso novo. Estes testes cobrem os dois alvos.
+ * The plugin hooks into /module, not /course, because
+ * restore_course_task::build() only adds restore_course_structure_step
+ * when the target is a new course. These tests cover both targets.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -51,12 +51,12 @@ require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
  */
 class restore_test extends advanced_testcase {
     /**
-     * Cria um curso com uma atividade e um recurso cujo HTML e cujo JS
-     * apontam para ela.
+     * Creates a course with an activity and a resource whose HTML and JS
+     * point to it.
      *
-     * @return array [stdClass $course, int $cmid da atividade, int $cmid do recurso]
+     * @return array [stdClass $course, int activity cmid, int resource cmid]
      */
-    protected function criar_curso_de_origem() {
+    protected function create_source_course() {
         global $USER;
 
         $generator = $this->getDataGenerator();
@@ -82,12 +82,12 @@ class restore_test extends advanced_testcase {
     }
 
     /**
-     * Faz o backup de um curso e devolve o diretorio extraido.
+     * Backs up a course and returns the extracted directory.
      *
      * @param int $courseid
      * @return string
      */
-    protected function fazer_backup($courseid) {
+    protected function make_backup($courseid) {
         global $USER, $CFG;
 
         $bc = new backup_controller(
@@ -113,16 +113,16 @@ class restore_test extends advanced_testcase {
     /**
      * Restores an extracted backup into a course.
      *
-     * @param string $dir Diretorio do backup extraido.
-     * @param int $destino Curso de destino.
-     * @param int $target Constante backup::TARGET_*.
+     * @param string $dir Extracted backup directory.
+     * @param int $targetcourseid Target course.
+     * @param int $target A backup::TARGET_* constant.
      */
-    protected function restaurar($dir, $destino, $target) {
+    protected function restore($dir, $targetcourseid, $target) {
         global $USER;
 
         $rc = new restore_controller(
             $dir,
-            $destino,
+            $targetcourseid,
             backup::INTERACTIVE_NO,
             backup::MODE_GENERAL,
             $USER->id,
@@ -134,13 +134,13 @@ class restore_test extends advanced_testcase {
     }
 
     /**
-     * Conteudo de um arquivo do unico mod_resource de um curso.
+     * Content of a file of a course's only mod_resource.
      *
      * @param int $courseid
      * @param string $filename
      * @return string
      */
-    protected function conteudo($courseid, $filename) {
+    protected function file_content($courseid, $filename) {
         global $DB;
 
         $cmid = $DB->get_field_sql(
@@ -163,12 +163,12 @@ class restore_test extends advanced_testcase {
     }
 
     /**
-     * Cmid da unica atividade page de um curso.
+     * Cmid of a course's only page activity.
      *
      * @param int $courseid
      * @return int
      */
-    protected function cmid_da_page($courseid) {
+    protected function page_cmid($courseid) {
         global $DB;
 
         return (int)$DB->get_field_sql(
@@ -182,181 +182,154 @@ class restore_test extends advanced_testcase {
     }
 
     /**
-     * Restaurando como curso novo, o link passa a apontar para o cmid novo.
+     * Restoring as a new course, the link points to the new cmid.
      */
-    public function test_restore_em_curso_novo_reescreve_o_link() {
-        global $USER;
-
+    public function test_restore_into_new_course_rewrites_the_link() {
         $this->resetAfterTest(true);
         $this->setAdminUser();
 
-        $origin = $this->criar_curso_de_origem();
+        $source = $this->create_source_course();
+        $course = $source[0];
+        $oldcmid = $source[1];
+        $dir = $this->make_backup($course->id);
 
-        $course = $origin[0];
-
-        $cmidantigo = $origin[1];
-
-        $rescmid = $origin[2];
-        $dir = $this->fazer_backup($course->id);
-
-        $novoid = restore_dbops::create_new_course(
+        $newcourseid = restore_dbops::create_new_course(
             'Destino',
             'destino-' . uniqid(),
             $course->category
         );
-        $this->restaurar($dir, $novoid, backup::TARGET_NEW_COURSE);
+        $this->restore($dir, $newcourseid, backup::TARGET_NEW_COURSE);
 
-        $cmidnovo = $this->cmid_da_page($novoid);
-        $this->assertNotEquals($cmidantigo, $cmidnovo);
-        $this->assertContains('view.php?id=' . $cmidnovo, $this->conteudo($novoid, 'index.html'));
-        $this->assertNotContains('view.php?id=' . $cmidantigo, $this->conteudo($novoid, 'index.html'));
+        $newcmid = $this->page_cmid($newcourseid);
+        $this->assertNotEquals($oldcmid, $newcmid);
+        $this->assertContains('view.php?id=' . $newcmid, $this->file_content($newcourseid, 'index.html'));
+        $this->assertNotContains('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'index.html'));
     }
 
     /**
-     * Restaurando em curso existente o plugin tambem age.
+     * Restoring into an existing course, the plugin acts too.
      *
-     * Este e o caso que um after_restore_course() nunca alcancaria.
+     * This is the case an after_restore_course() would never reach.
      */
-    public function test_restore_em_curso_existente_reescreve_o_link() {
+    public function test_restore_into_existing_course_rewrites_the_link() {
         $this->resetAfterTest(true);
         $this->setAdminUser();
 
-        $origin = $this->criar_curso_de_origem();
+        $source = $this->create_source_course();
+        $course = $source[0];
+        $oldcmid = $source[1];
+        $dir = $this->make_backup($course->id);
 
-        $course = $origin[0];
+        $target = $this->getDataGenerator()->create_course(['numsections' => 2]);
+        $this->restore($dir, $target->id, backup::TARGET_EXISTING_ADDING);
 
-        $cmidantigo = $origin[1];
-
-        $rescmid = $origin[2];
-        $dir = $this->fazer_backup($course->id);
-
-        $destino = $this->getDataGenerator()->create_course(['numsections' => 2]);
-        $this->restaurar($dir, $destino->id, backup::TARGET_EXISTING_ADDING);
-
-        $cmidnovo = $this->cmid_da_page($destino->id);
-        $this->assertNotEquals($cmidantigo, $cmidnovo);
-        $this->assertContains('view.php?id=' . $cmidnovo, $this->conteudo($destino->id, 'index.html'));
+        $newcmid = $this->page_cmid($target->id);
+        $this->assertNotEquals($oldcmid, $newcmid);
+        $this->assertContains('view.php?id=' . $newcmid, $this->file_content($target->id, 'index.html'));
     }
 
     /**
-     * Com a configuracao desligada, o .js sai intacto.
+     * With the setting off, the .js comes out untouched.
      */
-    public function test_js_nao_e_tocado_por_padrao() {
+    public function test_js_is_not_touched_by_default() {
         $this->resetAfterTest(true);
         $this->setAdminUser();
         set_config('rewritejs', 0, 'local_resourcelinkfix');
 
-        $origin = $this->criar_curso_de_origem();
+        $source = $this->create_source_course();
+        $course = $source[0];
+        $oldcmid = $source[1];
+        $dir = $this->make_backup($course->id);
 
-        $course = $origin[0];
-
-        $cmidantigo = $origin[1];
-
-        $rescmid = $origin[2];
-        $dir = $this->fazer_backup($course->id);
-
-        $novoid = restore_dbops::create_new_course(
+        $newcourseid = restore_dbops::create_new_course(
             'Destino js off',
             'djsoff-' . uniqid(),
             $course->category
         );
-        $this->restaurar($dir, $novoid, backup::TARGET_NEW_COURSE);
+        $this->restore($dir, $newcourseid, backup::TARGET_NEW_COURSE);
 
-        $cmidnovo = $this->cmid_da_page($novoid);
-        // O HTML foi corrigido...
-        $this->assertContains('view.php?id=' . $cmidnovo, $this->conteudo($novoid, 'index.html'));
-        // ...e o .js nao.
-        $this->assertContains('view.php?id=' . $cmidantigo, $this->conteudo($novoid, 'nav.js'));
+        $newcmid = $this->page_cmid($newcourseid);
+        // The HTML was fixed...
+        $this->assertContains('view.php?id=' . $newcmid, $this->file_content($newcourseid, 'index.html'));
+        // ...and the .js was not.
+        $this->assertContains('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'nav.js'));
     }
 
     /**
-     * Com a configuracao ligada, o .js tambem e reescrito.
+     * With the setting on, the .js is rewritten too.
      */
-    public function test_js_e_reescrito_quando_ligado() {
+    public function test_js_is_rewritten_when_enabled() {
         $this->resetAfterTest(true);
         $this->setAdminUser();
         set_config('rewritejs', 1, 'local_resourcelinkfix');
 
-        $origin = $this->criar_curso_de_origem();
+        $source = $this->create_source_course();
+        $course = $source[0];
+        $oldcmid = $source[1];
+        $dir = $this->make_backup($course->id);
 
-        $course = $origin[0];
-
-        $cmidantigo = $origin[1];
-
-        $rescmid = $origin[2];
-        $dir = $this->fazer_backup($course->id);
-
-        $novoid = restore_dbops::create_new_course(
+        $newcourseid = restore_dbops::create_new_course(
             'Destino js on',
             'djson-' . uniqid(),
             $course->category
         );
-        $this->restaurar($dir, $novoid, backup::TARGET_NEW_COURSE);
+        $this->restore($dir, $newcourseid, backup::TARGET_NEW_COURSE);
 
-        $cmidnovo = $this->cmid_da_page($novoid);
-        $this->assertContains('view.php?id=' . $cmidnovo, $this->conteudo($novoid, 'nav.js'));
-        $this->assertNotContains('view.php?id=' . $cmidantigo, $this->conteudo($novoid, 'nav.js'));
+        $newcmid = $this->page_cmid($newcourseid);
+        $this->assertContains('view.php?id=' . $newcmid, $this->file_content($newcourseid, 'nav.js'));
+        $this->assertNotContains('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'nav.js'));
     }
 
     /**
-     * Desligado, o plugin nao faz nada: o restore se comporta como se ele
-     * nao existisse.
+     * Disabled, the plugin does nothing: restore behaves as if it did not
+     * exist.
      */
-    public function test_desligado_nao_toca_em_nada() {
+    public function test_disabled_touches_nothing() {
         $this->resetAfterTest(true);
         $this->setAdminUser();
         set_config('enabled', 0, 'local_resourcelinkfix');
 
-        $origin = $this->criar_curso_de_origem();
+        $source = $this->create_source_course();
+        $course = $source[0];
+        $oldcmid = $source[1];
+        $dir = $this->make_backup($course->id);
 
-        $course = $origin[0];
-
-        $cmidantigo = $origin[1];
-
-        $rescmid = $origin[2];
-        $dir = $this->fazer_backup($course->id);
-
-        $novoid = restore_dbops::create_new_course(
+        $newcourseid = restore_dbops::create_new_course(
             'Destino off',
             'doff-' . uniqid(),
             $course->category
         );
-        $this->restaurar($dir, $novoid, backup::TARGET_NEW_COURSE);
+        $this->restore($dir, $newcourseid, backup::TARGET_NEW_COURSE);
 
-        $this->assertContains('view.php?id=' . $cmidantigo, $this->conteudo($novoid, 'index.html'));
+        $this->assertContains('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'index.html'));
     }
 
     /**
-     * O arquivo principal continua sendo o principal depois da reescrita.
+     * The main file is still the main file after the rewrite.
      */
-    public function test_sortorder_e_preservado() {
+    public function test_sortorder_is_preserved() {
         global $DB;
 
         $this->resetAfterTest(true);
         $this->setAdminUser();
 
-        $origin = $this->criar_curso_de_origem();
+        $source = $this->create_source_course();
+        $course = $source[0];
+        $dir = $this->make_backup($course->id);
 
-        $course = $origin[0];
-
-        $cmidantigo = $origin[1];
-
-        $rescmid = $origin[2];
-        $dir = $this->fazer_backup($course->id);
-
-        $novoid = restore_dbops::create_new_course(
+        $newcourseid = restore_dbops::create_new_course(
             'Destino so',
             'dso-' . uniqid(),
             $course->category
         );
-        $this->restaurar($dir, $novoid, backup::TARGET_NEW_COURSE);
+        $this->restore($dir, $newcourseid, backup::TARGET_NEW_COURSE);
 
         $cmid = $DB->get_field_sql(
             "SELECT cm.id
                                       FROM {course_modules} cm
                                       JOIN {modules} m ON m.id = cm.module
                                      WHERE cm.course = ? AND m.name = 'resource'",
-            [$novoid],
+            [$newcourseid],
             IGNORE_MULTIPLE
         );
         $file = get_file_storage()->get_file(

@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Testes da selecao de arquivos.
+ * Tests for file selection.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -33,7 +33,7 @@ global $CFG;
 require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/testable_plugin.php');
 
 /**
- * Quais arquivos da area content entram na reescrita.
+ * Which files in the content area are rewritten.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -54,9 +54,9 @@ class file_selection_test extends advanced_testcase {
     }
 
     /**
-     * HTML entra sempre, independente da configuracao de .js.
+     * HTML is always included, whatever the .js setting.
      */
-    public function test_html_entra_sempre() {
+    public function test_html_is_always_included() {
         foreach ([false, true] as $rewritejs) {
             $plugin = $this->plugin($rewritejs);
             $this->assertTrue($plugin->processes('index.html'));
@@ -66,28 +66,28 @@ class file_selection_test extends advanced_testcase {
     }
 
     /**
-     * .js so entra quando a configuracao esta ligada — e ela nasce desligada,
-     * porque .js e codigo: um erro ali quebra a navegacao do recurso.
+     * .js is only included when the setting is on — and it starts off,
+     * because .js is code: a mistake there breaks the resource's navigation.
      */
-    public function test_js_depende_da_configuracao() {
+    public function test_js_depends_on_the_setting() {
         $this->assertFalse($this->plugin(false)->processes('moodleface.js'));
         $this->assertTrue($this->plugin(true)->processes('moodleface.js'));
     }
 
     /**
-     * O resto nunca entra, nem com .js ligado.
+     * Nothing else is ever included, not even with .js on.
      */
-    public function test_outras_extensoes_nunca_entram() {
+    public function test_other_extensions_are_never_included() {
         $plugin = $this->plugin(true);
-        foreach (['style.css', 'material.pdf', 'dados.json', 'foto.png', 'leiame.txt'] as $nome) {
-            $this->assertFalse($plugin->processes($nome), $nome . ' nao deveria entrar');
+        foreach (['style.css', 'material.pdf', 'dados.json', 'foto.png', 'leiame.txt'] as $name) {
+            $this->assertFalse($plugin->processes($name), $name . ' should not be included');
         }
     }
 
     /**
-     * O padrao do plugin, sem configuracao gravada, e nao mexer em .js.
+     * With no stored setting, the plugin's default is to leave .js alone.
      */
-    public function test_padrao_e_nao_mexer_em_js() {
+    public function test_default_leaves_js_alone() {
         $plugin = new local_resourcelinkfix_testable_plugin();
         $this->assertFalse($plugin->processes('nav.js'));
         $this->assertTrue($plugin->processes('index.html'));
