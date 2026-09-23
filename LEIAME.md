@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=f1da4a78c09992da4d8308732a151222789a524a6c50e7791b39c4852699970c -->
+<!-- sync: README.md sha256=e742c733d50e5239b01979b5d23e83658b01914a43dda8c4ac6e69e8aa2a00c8 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -199,8 +199,8 @@ propósito para confirmar que o teste fica vermelho.
 
 ### Meça a sua instalação
 
-O plugin traz a ferramenta que produziu os números abaixo. Rode-a na raiz do Moodle, como o
-usuário do servidor web (`sudo -u www-data`, por exemplo):
+O plugin traz uma ferramenta de medição. Rode-a na raiz do Moodle, como o usuário do servidor
+web (`sudo -u www-data`, por exemplo):
 
     php local/resourcelinkfix/cli/measure_links.php --js
 
@@ -211,44 +211,11 @@ demais opções.
 
 Use-a **antes** de ligar a opção `.js`: ela diz de antemão o que vai ser tocado.
 
-### Medição em uma instalação real
-
-Números de uma instalação Moodle 3.0 de porte médio, lendo o conteúdo dos arquivos (não apenas os
-registros da tabela `files`) e varrendo o arquivo inteiro, como o plugin faz:
-
-| | |
-|---|---|
-| Arquivos HTML distintos em `mod_resource` | 4.968 |
-| Deles, com algum link | 2.100 (42,3%) |
-| Links de atividade encontrados | 14.628 |
-| — destes, apontam para **outro** Moodle | 156 |
-| **Links no escopo do plugin** | **14.472** |
-| Reescritos | **14.458 (99,90%)** |
-| Com `id` fora da primeira posição | **0** |
-| Fora do padrão (`edit.php?d=`, `user/view.php?course=`) | 14 (0,10%) |
-| | |
-| Arquivos `.js` distintos | 2.214 |
-| Deles, com link de atividade | 264 (11,9%) |
-| Links dentro de `.js` | 1.833 |
-| URL literal, alcançável | **1.827 (99,7%)** |
-| Montados em tempo de execução | **0** |
-
-Os 156 links para outros Moodles ficam fora do denominador de propósito: o plugin os preserva por
-desenho, e contá-los como "não alcançados" seria puni-lo por seguir a própria regra. Ficam
-visíveis porque dizem algo sobre o acervo — que ele referencia outras instalações, o que importa
-se esses cursos forem migrados um dia.
-
 ⚠️ **O que "outro Moodle" significa depende do backup.** A ferramenta compara o host do link com
 o `wwwroot` do site onde ela roda; o plugin, durante um restore, compara com o `original_wwwroot`
 daquele backup. Os dois coincidem quando backup e restore acontecem no mesmo site. Ao restaurar um
 curso vindo de outra instalação, os links daquela instalação deixam de ser "outro Moodle" e passam
-a ser reescritos, host e id — então a medição feita aqui subestima o alcance naquele cenário.
-
-Somando HTML e `.js`: dos 16.305 links no escopo, o plugin reescreve **88,7%** com a configuração
-padrão e **99,9%** com a opção `.js` ligada.
-
-Os números valem para **aquele** acervo — o formato dos links depende de como cada equipe escreve
-o material. Rode `cli/measure_links.php --js` na sua instalação antes de tirar conclusões.
+a ser reescritos, host e id — então, nesse cenário, a ferramenta subestima o alcance.
 
 ## Testes
 
@@ -350,7 +317,6 @@ Atender ao Moodle 3.0 (PHP 5.6) e ao moodle-cs ao mesmo tempo impede a desestrut
 - **Host partido por hifenização não é corrigido.** Texto colado de PDF chega
   com o domínio quebrado (`https:// site`, `exam- ple`, `site. org`). Como o
   espaço impede ler a URL inteira, o link é preservado em vez de adivinhado.
-  Medido em uma instalação real: 6 ocorrências em 14.628 links.
 - **URL com espaço literal no caminho** (`https://site/pasta com espaco/mod/...`)
   é lida como caminho relativo, e o id pode ser remapeado mesmo sendo de outro
   site. Endereço com espaço é malformado — o correto é `%20`, que o plugin trata
