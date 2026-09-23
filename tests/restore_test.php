@@ -203,8 +203,8 @@ final class restore_test extends advanced_testcase {
 
         $newcmid = $this->page_cmid($newcourseid);
         $this->assertNotEquals($oldcmid, $newcmid);
-        $this->assertContains('view.php?id=' . $newcmid, $this->file_content($newcourseid, 'index.html'));
-        $this->assertNotContains('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'index.html'));
+        $this->assertStringContainsString('view.php?id=' . $newcmid, $this->file_content($newcourseid, 'index.html'));
+        $this->assertStringNotContainsString('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'index.html'));
     }
 
     /**
@@ -226,7 +226,7 @@ final class restore_test extends advanced_testcase {
 
         $newcmid = $this->page_cmid($target->id);
         $this->assertNotEquals($oldcmid, $newcmid);
-        $this->assertContains('view.php?id=' . $newcmid, $this->file_content($target->id, 'index.html'));
+        $this->assertStringContainsString('view.php?id=' . $newcmid, $this->file_content($target->id, 'index.html'));
     }
 
     /**
@@ -251,9 +251,9 @@ final class restore_test extends advanced_testcase {
 
         $newcmid = $this->page_cmid($newcourseid);
         // The HTML was fixed...
-        $this->assertContains('view.php?id=' . $newcmid, $this->file_content($newcourseid, 'index.html'));
+        $this->assertStringContainsString('view.php?id=' . $newcmid, $this->file_content($newcourseid, 'index.html'));
         // ...and the .js was not.
-        $this->assertContains('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'nav.js'));
+        $this->assertStringContainsString('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'nav.js'));
     }
 
     /**
@@ -277,8 +277,8 @@ final class restore_test extends advanced_testcase {
         $this->restore($dir, $newcourseid, backup::TARGET_NEW_COURSE);
 
         $newcmid = $this->page_cmid($newcourseid);
-        $this->assertContains('view.php?id=' . $newcmid, $this->file_content($newcourseid, 'nav.js'));
-        $this->assertNotContains('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'nav.js'));
+        $this->assertStringContainsString('view.php?id=' . $newcmid, $this->file_content($newcourseid, 'nav.js'));
+        $this->assertStringNotContainsString('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'nav.js'));
     }
 
     /**
@@ -302,7 +302,7 @@ final class restore_test extends advanced_testcase {
         );
         $this->restore($dir, $newcourseid, backup::TARGET_NEW_COURSE);
 
-        $this->assertContains('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'index.html'));
+        $this->assertStringContainsString('view.php?id=' . $oldcmid, $this->file_content($newcourseid, 'index.html'));
     }
 
     /**
