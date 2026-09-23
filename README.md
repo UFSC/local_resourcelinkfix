@@ -1,75 +1,74 @@
 # local_resourcelinkfix
 
-Corrige, durante o restore, os links para atividades dentro de arquivos HTML de
-recursos do tipo **Arquivo** (`mod_resource`). Moodle 3.0+ (PHP 5.4+).
+Versão em português: [LEIAME.md](LEIAME.md)
 
-## Como funciona
+Fixes, during restore, the links to activities inside HTML files of **File** resources
+(`mod_resource`). Requires Moodle 3.0 or later; tested on Moodle 3.0 (PHP 5.6) and 3.8
+(PHP 7.4).
 
-O plugin se conecta ao ponto **`/module`** do restore e implementa
-`after_restore_module()`, executado pelo passo `executing_after_restore` da
-`restore_final_task` — depois de todas as atividades e antes de
-`drop_and_clean_temp_stuff`, com a `backup_ids_temp` ainda disponível.
+## How it works
 
-Para cada `mod_resource` restaurado:
+The plugin hooks into the restore's **`/module`** path and implements
+`after_restore_module()`, run by the `executing_after_restore` step of
+`restore_final_task` — after all activities and before `drop_and_clean_temp_stuff`, while
+`backup_ids_temp` is still available.
 
-1. Lê o mapa `course_module` (cmid antigo → novo) do restore em andamento,
-   ignorando `newitemid = 0` (módulo não restaurado por completo).
-2. Nos arquivos `.html`/`.htm` da área `content` (e nos `.js`, se a opção
-   estiver ligada), troca:
-   - `mod/xxx/view.php?id=CMID` e `mod/xxx/complete.php?id=CMID` → novo cmid
-   - `mod/xxx/index.php?id=CURSO` e `course/view.php?id=CURSO` → novo curso
-3. Em backup vindo de **outro site**, troca também o `wwwroot` antigo
-   (`original_wwwroot`) pelo deste site nos links absolutos.
-4. Regrava o conteúdo com `stored_file::replace_file_with()`, preservando o
-   registro do arquivo (id, `sortorder`, nome, `timecreated`).
+For each restored `mod_resource`:
 
-IDs sem mapeamento ficam intactos, e a troca é feita em uma única passada —
-um cmid já reescrito não é remapeado.
+1. Reads the `course_module` map (old cmid → new) of the running restore,
+   ignoring `newitemid = 0` (module not fully restored).
+2. In the `.html`/`.htm` files of the `content` area (and in `.js` files, if the option is
+   on), replaces:
+   - `mod/xxx/view.php?id=CMID` and `mod/xxx/complete.php?id=CMID` → new cmid
+   - `mod/xxx/index.php?id=COURSE` and `course/view.php?id=COURSE` → new course
+3. For a backup from **another site**, also replaces the old `wwwroot`
+   (`original_wwwroot`) with this site's in absolute links.
+4. Writes the content back with `stored_file::replace_file_with()`, keeping the file record
+   (id, `sortorder`, name, `timecreated`).
 
-### Na dúvida sobre a URL, não se toca
+Unmapped ids stay untouched, and the replacement runs in a single pass — a cmid already
+rewritten is not remapped.
 
-O plugin não tenta adivinhar a forma de um endereço. Quando há indício de URL
-absoluta — `://`, `//` no início, credencial, ou um último segmento que pareça
-domínio — e a base não pode ser confirmada como a do site de origem, o link
-fica exatamente como está.
+### When in doubt about the URL, leave it alone
 
-Isso vale inclusive para formas que o plugin não sabe ler: IPv6
-(`https://[2001:db8::1]/...`), domínio com underscore, caminho longo, barra
-dupla, esquema não-HTTP. A ausência de reconhecimento nunca vira permissão
-para remapear.
+The plugin does not guess the shape of an address. When there is a hint of an absolute URL —
+`://`, a leading `//`, credentials, or a last segment that looks like a domain — and the base
+cannot be confirmed as the source site's, the link stays exactly as it is.
 
-A regra existe porque o inverso — supor "caminho relativo" sempre que o host
-não é reconhecido — faz o id de um link para **outro** Moodle ser trocado pelo
-daqui. O link continua abrindo, mas mostra a atividade errada, sem erro visível.
-Um link obsoleto é preferível a um silenciosamente errado.
+This holds even for forms the plugin cannot read: IPv6 (`https://[2001:db8::1]/...`), a domain
+with an underscore, a long path, a double slash, a non-HTTP scheme. Failing to recognise an
+address never becomes permission to remap it.
 
-### Link de um terceiro site não é tocado
+The rule exists because the opposite — assuming "relative path" whenever the host is not
+recognised — swaps the id of a link to **another** Moodle for one from this site. The link
+still opens, but shows the wrong activity, with no visible error. A stale link is better than
+a silently wrong one.
 
-Se o link absoluto aponta para um host que **não** é o `original_wwwroot`
-(por exemplo `https://terceiro.example.com/mod/page/view.php?id=123`),
-nem o host nem o id são alterados: aquele id pertence ao outro site, e
-remapeá-lo faria o link abrir **outra atividade** lá. Sem `original_wwwroot`
-no backup, nenhum link absoluto é tocado — só os relativos.
+### A link to a third site is not touched
 
-### O wwwroot só muda junto com o id
+If an absolute link points to a host that is **not** the `original_wwwroot` (for example
+`https://third.example.com/mod/page/view.php?id=123`), neither the host nor the id is changed:
+that id belongs to the other site, and remapping it would make the link open **another
+activity** there. Without `original_wwwroot` in the backup, no absolute link is touched — only
+relative ones.
 
-O host antigo é trocado **somente quando o id também foi remapeado**. Se a
-atividade não veio no backup, o id continua sendo o do site de origem: trocar o
-host apontaria para este site com um id alheio, que pode abrir **outra
-atividade**. Mantendo o host antigo, o link segue válido no site de origem —
-obsoleto é melhor que silenciosamente errado.
+### The wwwroot only changes together with the id
 
-Isso importa porque o core só resolve metade do problema: o
-`restore_decode_processor` (`restore_plan.class.php:55`) troca o wwwroot nos
-**campos de texto** do banco, mas conteúdo de **arquivo** nunca passa por ele.
-Num curso restaurado entre sites, `page.content` e `course_sections.summary`
-saem com o host certo enquanto os `.html` de `mod_resource` ficam com o antigo.
+The old host is replaced **only when the id was also remapped**. If the activity was not in the
+backup, the id is still the source site's: replacing the host would point to this site with a
+foreign id, which may open **another activity**. Keeping the old host, the link stays valid on
+the source site — stale is better than silently wrong.
 
-### Por que `/module` e não `/course`
+This matters because core only solves half the problem: `restore_decode_processor`
+(`restore_plan.class.php:55`) replaces the wwwroot in database **text fields**, but **file**
+content never goes through it. In a course restored across sites, `page.content` and
+`course_sections.summary` come out with the right host while the `mod_resource` `.html` files
+keep the old one.
 
-`restore_course_task::build()` só adiciona o `restore_course_structure_step`
-(onde fica o ponto de conexão `/course`) quando o alvo é **curso novo** ou
-quando `overwrite_conf` está ligado:
+### Why `/module` and not `/course`
+
+`restore_course_task::build()` only adds `restore_course_structure_step` (where the `/course`
+hook lives) when the target is a **new course** or when `overwrite_conf` is on:
 
     // backup/moodle2/restore_course_task.class.php
     if ($this->get_target() == backup::TARGET_NEW_COURSE ||
@@ -77,201 +76,208 @@ quando `overwrite_conf` está ligado:
         $this->add_step(new restore_course_structure_step('course_info', 'course.xml'));
     }
 
-Um `after_restore_course()` portanto **nunca roda** ao restaurar em curso
-existente nem ao importar atividades. Já o `restore_module_structure_step` é
-incondicional em `restore_activity_task::build()` (desde que a configuração
-`activities` esteja ligada — sem ela não há atividade a corrigir).
+An `after_restore_course()` therefore **never runs** when restoring into an existing course or
+importing activities. `restore_module_structure_step`, on the other hand, is unconditional in
+`restore_activity_task::build()` (as long as the `activities` setting is on — without it there is
+no activity to fix).
 
-## Configuração
+## Settings
 
-*Administração do site > Plugins > Plugins locais > Correção de links em recursos*
+*Site administration > Plugins > Local plugins > Resource link fix (restore)*
 
-| Opção | Padrão | O que faz |
+| Option | Default | What it does |
 |---|---|---|
-| **Ativado** (`enabled`) | ligado | Desmarcado, o plugin não faz nada e o restore se comporta como se ele não existisse. |
-| **Reescrever também arquivos .js** (`rewritejs`) | desligado | Marcado, os `.js` da área `content` entram na reescrita. Só URLs completas com id numérico são tocadas — links montados em tempo de execução (`'view.php?id=' + cmid`) nunca são alterados. |
-| **Modo simulação** (`dryrun`) | desligado | Marcado, apenas registra no log do restore quais arquivos *seriam* reescritos e quantos links cada um tem. Nenhum arquivo é alterado. |
+| **Enabled** (`enabled`) | on | Unticked, the plugin does nothing and restore behaves as if it did not exist. |
+| **Also rewrite .js files** (`rewritejs`) | off | Ticked, `.js` files in the `content` area are rewritten too. Only complete URLs with a numeric id are touched — links built at run time (`'view.php?id=' + cmid`) are never changed. |
+| **Simulation mode** (`dryrun`) | off | Ticked, only logs to the restore log which files *would* be rewritten and how many links each has. No file is changed. |
 
-A simulação serve para medir o impacto em um curso real antes de ligar a reescrita: restaure com
-ela marcada e leia o log do restore. Recomenda-se usá-la antes de ligar a opção `.js`, que mexe
-em **código**: um erro no HTML estraga um link, no `.js` pode quebrar a navegação do recurso.
+Simulation mode measures the impact on a real course before turning rewriting on: restore with it ticked
+and read the restore log. Use it before turning on the `.js` option, which touches **code**: a
+mistake in HTML breaks one link; in `.js` it can break the resource's navigation.
 
-## Instalação
+## Installation
 
-Copiar a pasta para `local/resourcelinkfix` e rodar a atualização em
-*Administração do site > Notificações*.
+Copy the folder to `local/resourcelinkfix` and run the upgrade from
+*Site administration > Notifications*.
 
-## Exemplo
+## Example
 
-O arquivo [`example/navigation.html`](example/navigation.html) traz uma página de navegação com
-um caso de cada regra — os reescritos e os preservados, cada um com o comentário do porquê.
-Serve de referência e de material para reproduzir os cenários abaixo.
+[`example/navigation.html`](example/navigation.html) is a navigation page with one case of each
+rule — the rewritten and the preserved, each with a comment on why. It serves as a reference and
+as material to reproduce the scenarios below.
 
-## Cenários verificados no Moodle 3.0.5
+## Scenarios verified on Moodle 3.0.5
 
-- [x] Restaurar como curso novo (`TARGET_NEW_COURSE`)
-- [x] Restaurar mesclando em curso existente (`TARGET_EXISTING_ADDING`)
-- [x] Restaurar em curso existente apagando o conteúdo (`TARGET_EXISTING_DELETING`)
-- [x] Importar atividades de outro curso (`MODE_IMPORT`)
-- [x] Links absolutos (`https://.../mod/...`) e relativos (`../../mod/...`)
-- [x] URL sem esquema (`//site/mod/...`) e com credencial (`user@site`)
-- [x] Host com subpasta (`site/moodle`) e com porta (`site:8080`)
-- [x] Host irreconhecível (IPv6, underscore, caminho longo, barra dupla,
-      esquema não-HTTP): o id **não** é remapeado
-- [x] Link para atividade que NÃO veio no backup (permanece inalterado)
-- [x] Recurso com vários arquivos HTML (subpáginas)
-- [x] Backup vindo de outro site: `wwwroot` antigo trocado nos links mapeados
-- [x] Backup vindo de outro site: link não mapeado mantém o host antigo
-- [x] Link para um TERCEIRO site: host e id intactos
-- [x] Backup sem `original_wwwroot`: links absolutos intactos
-- [x] Desativado: nenhum arquivo é tocado
-- [x] Modo simulação: registra a contagem no log e não grava
+- [x] Restore as a new course (`TARGET_NEW_COURSE`)
+- [x] Restore merging into an existing course (`TARGET_EXISTING_ADDING`)
+- [x] Restore into an existing course, deleting its content (`TARGET_EXISTING_DELETING`)
+- [x] Import activities from another course (`MODE_IMPORT`)
+- [x] Absolute (`https://.../mod/...`) and relative (`../../mod/...`) links
+- [x] Scheme-less URL (`//site/mod/...`) and with credentials (`user@site`)
+- [x] Host with a subfolder (`site/moodle`) and with a port (`site:8080`)
+- [x] Unrecognisable host (IPv6, underscore, long path, double slash, non-HTTP scheme): the id
+      is **not** remapped
+- [x] Link to an activity NOT in the backup (left unchanged)
+- [x] Resource with several HTML files (subpages)
+- [x] Backup from another site: old `wwwroot` replaced in mapped links
+- [x] Backup from another site: unmapped link keeps the old host
+- [x] Link to a THIRD site: host and id untouched
+- [x] Backup without `original_wwwroot`: absolute links untouched
+- [x] Disabled: no file is touched
+- [x] Simulation mode: logs the count and does not write
 
-Os cenários acima foram exercitados com **material de exemplo** construído para cobrir cada
-regra, por `backup_controller`/`restore_controller` em um Moodle 3.0.5. Cada comportamento tem
-teste próprio, e as regras críticas foram verificadas por mutação — alterando o código de
-propósito para confirmar que o teste fica vermelho.
+The scenarios above were exercised with **sample material** built to cover each rule, through
+`backup_controller`/`restore_controller` on Moodle 3.0.5. Each behaviour has its own test, and
+the critical rules were verified by mutation — changing the code on purpose to confirm the test
+goes red.
 
-### Meça a sua instalação
+### Measure your installation
 
-O plugin traz a ferramenta que produziu os números abaixo:
+The plugin ships the tool that produced the numbers below:
 
     php local/resourcelinkfix/cli/measure_links.php --js
 
-Ela é somente leitura — nenhum arquivo é alterado — e responde, para o seu acervo, quantos links
-o plugin alcança, quantos escapam e por quê, e se os links dentro de `.js` são literais ou
-montados em tempo de execução. Aceita `--course=ID` para olhar um curso só e `--help` para as
-demais opções.
+It is read-only — no file is changed — and answers, for your content, how many links the plugin
+reaches, how many escape and why, and whether links inside `.js` are literal or built at run
+time. It accepts `--course=ID` to look at a single course and `--help` for the other options.
 
-Use-a **antes** de ligar a opção `.js`: ela diz de antemão o que vai ser tocado.
+Use it **before** turning on the `.js` option: it tells you in advance what will be touched.
 
-### Medição em uma instalação real
+### Measurement on a real installation
 
-Números de uma instalação Moodle 3.0 de porte médio, lendo o conteúdo dos arquivos (não apenas os
-registros da tabela `files`) e varrendo o arquivo inteiro, como o plugin faz:
+Numbers from a medium-sized Moodle 3.0 installation, reading file contents (not only the `files`
+table records) and scanning each whole file, as the plugin does:
 
 | | |
 |---|---|
-| Arquivos HTML distintos em `mod_resource` | 4.968 |
-| Deles, com algum link | 2.100 (42,3%) |
-| Links de atividade encontrados | 14.628 |
-| — destes, apontam para **outro** Moodle | 156 |
-| **Links no escopo do plugin** | **14.472** |
-| Reescritos | **14.458 (99,90%)** |
-| Com `id` fora da primeira posição | **0** |
-| Fora do padrão (`edit.php?d=`, `user/view.php?course=`) | 14 (0,10%) |
+| Distinct HTML files in `mod_resource` | 4,968 |
+| Of these, with any link | 2,100 (42.3%) |
+| Activity links found | 14,628 |
+| — of which, pointing to **another** Moodle | 156 |
+| **Links in the plugin's scope** | **14,472** |
+| Rewritten | **14,458 (99.90%)** |
+| With `id` not in first position | **0** |
+| Outside the pattern (`edit.php?d=`, `user/view.php?course=`) | 14 (0.10%) |
 | | |
-| Arquivos `.js` distintos | 2.214 |
-| Deles, com link de atividade | 264 (11,9%) |
-| Links dentro de `.js` | 1.833 |
-| URL literal, alcançável | **1.827 (99,7%)** |
-| Montados em tempo de execução | **0** |
+| Distinct `.js` files | 2,214 |
+| Of these, with an activity link | 264 (11.9%) |
+| Links inside `.js` | 1,833 |
+| Literal URL, reachable | **1,827 (99.7%)** |
+| Built at run time | **0** |
 
-Os 156 links para outros Moodles ficam fora do denominador de propósito: o plugin os preserva por
-desenho, e contá-los como "não alcançados" seria puni-lo por seguir a própria regra. Ficam
-visíveis porque dizem algo sobre o acervo — que ele referencia outras instalações, o que importa
-se esses cursos forem migrados um dia.
+The 156 links to other Moodles are left out of the denominator on purpose: the plugin preserves
+them by design, and counting them as "not reached" would penalise it for following its own rule.
+They stay visible because they say something about the content — that it references other
+installations, which matters if those courses are ever migrated.
 
-⚠️ **O que "outro Moodle" significa depende do backup.** A ferramenta compara o host do link com
-o `wwwroot` do site onde ela roda; o plugin, durante um restore, compara com o `original_wwwroot`
-daquele backup. Os dois coincidem quando backup e restore acontecem no mesmo site. Ao restaurar um
-curso vindo de outra instalação, os links daquela instalação deixam de ser "outro Moodle" e passam
-a ser reescritos, host e id — então a medição feita aqui subestima o alcance naquele cenário.
+⚠️ **What "another Moodle" means depends on the backup.** The tool compares the link's host with
+the `wwwroot` of the site where it runs; the plugin, during a restore, compares it with that
+backup's `original_wwwroot`. The two match when backup and restore happen on the same site. When
+restoring a course from another installation, links to that installation stop being "another
+Moodle" and are rewritten, host and id — so the measurement made here underestimates the reach
+in that scenario.
 
-Somando HTML e `.js`: dos 16.305 links no escopo, o plugin reescreve **88,7%** com a configuração
-padrão e **99,9%** com a opção `.js` ligada.
+Adding HTML and `.js`: of the 16,305 links in scope, the plugin rewrites **88.7%** with the
+default settings and **99.9%** with the `.js` option on.
 
-Os números valem para **aquele** acervo — o formato dos links depende de como cada equipe escreve
-o material. Rode `cli/measure_links.php --js` na sua instalação antes de tirar conclusões.
+The numbers hold for **that** content — the shape of links depends on how each team writes its
+material. Run `cli/measure_links.php --js` on your installation before drawing conclusions.
 
-## Testes
+## Testing
 
-A suíte é autocontida: não depende de script, container ou estrutura de diretórios de quem a
-executa. Os mesmos 46 testes rodam do Moodle 3.0 ao 3.8.
+The suite is self-contained: it does not depend on scripts, containers or the directory layout
+of whoever runs it. The same 46 tests run from Moodle 3.0 to 3.8.
 
-| Arquivo | Cobre |
+| File | Covers |
 |---|---|
-| `tests/rewrite_links_test.php` | A reescrita: cmid, curso, `complete.php`, host de origem, terceiro site, host quebrado por hifenização, literal x montado em `.js` |
-| `tests/file_selection_test.php` | Quais arquivos entram, e o papel da opção `.js` |
-| `tests/restore_test.php` | Integração: backup e restore reais, em curso novo e em curso existente |
-| `tests/pcre_limits_test.php` | Limites do PCRE: com a regex abortada, o arquivo é recusado e a trava nega; entradas longas não estouram |
+| `tests/rewrite_links_test.php` | Rewriting: cmid, course, `complete.php`, source host, third site, host broken by hyphenation, literal vs built in `.js` |
+| `tests/file_selection_test.php` | Which files are included, and the role of the `.js` option |
+| `tests/restore_test.php` | Integration: real backup and restore, into a new course and an existing one |
+| `tests/pcre_limits_test.php` | PCRE limits: with the regex aborted, the file is refused and the guard says no; long inputs do not blow up |
 
-### Integração contínua
+### Continuous integration
 
-A cada push e pull request, o GitHub Actions (`.github/workflows/ci.yml`) testa o plugin num
-Moodle limpo, em duas versões:
+On every push and pull request, GitHub Actions (`.github/workflows/ci.yml`) tests the plugin on a
+clean Moodle:
 
-| Job | Moodle | PHP | O que roda |
+| Job | Moodle | PHP | Runs |
 |---|---|---|---|
-| `moodle38` | 3.8 (`MOODLE_38_STABLE`) | 7.4 | [moodle-plugin-ci](https://moodlehq.github.io/moodle-plugin-ci/) 4.x: PHPUnit, lint, validação, savepoints, Coding Style (phpcs), PHPDoc e phpmd |
-| `moodle30` | 3.0 (`MOODLE_30_STABLE`) | 5.6 | Só PHPUnit, com o ambiente montado à mão |
+| `versions` | — | — | Picks versions from the branch: `MOODLE_30_STABLE` → 3.0, `MOODLE_38_STABLE` → 3.8; any other (`main`, work branches) → `DEFAULT_VERSIONS`, currently `30 38` |
+| `moodle-plugin-ci` | 3.8 | 7.4 | [moodle-plugin-ci](https://moodlehq.github.io/moodle-plugin-ci/) 4.x: PHPUnit, lint, validate, savepoints, coding style (phpcs), PHPDoc and phpmd |
+| `moodle30` | 3.0 | 5.6 | PHPUnit only, with the environment set up by hand |
+| `leiame` | — | — | `LEIAME.md` matches the current `README.md` (hash on its first line) |
 
-O moodle-plugin-ci não aceita Moodle anterior ao 3.2 (e a 4.x, anterior ao 3.8.3), por isso o
-job do 3.0 não usa a ferramenta. As normas verificadas no 3.8 valem para o 3.0: o código é o
-mesmo. Por ora, phpcs, PHPDoc e phpmd só avisam, sem falhar o job.
+moodle-plugin-ci does not support Moodle before 3.2 (and 4.x, before 3.8.3), so the 3.0 job does
+not use it. The standards checked on 3.8 hold for 3.0: the code is the same. For now phpcs,
+PHPDoc and phpmd only warn, without failing the job.
 
-### Rodar localmente
+This `README.md` is the source; `LEIAME.md` is its Portuguese translation. When changing this
+file, translate the change there and update the hash on its first line, or the `leiame` job
+fails.
 
-**Moodle 3.8 ou posterior**, numa instalação com o ambiente de testes preparado:
+### Running locally
+
+**Moodle 3.8 or later**, on an installation with the test environment initialised:
 
     php admin/tool/phpunit/cli/init.php
     vendor/bin/phpunit --testsuite local_resourcelinkfix_testsuite
 
-Para verificar também as normas, instale o moodle-plugin-ci e rode os mesmos comandos do job
-`moodle38`.
+To check the standards too, install moodle-plugin-ci and run the same commands as the
+`moodle-plugin-ci` job.
 
-**Moodle 3.0 com PHP 5.6**: o `init.php` não funciona como está. Ele roda
-`composer self-update`, que traz o Composer 2.x e aborta no PHP 5.6. O caminho que o CI usa:
+**Moodle 3.0 on PHP 5.6**: `init.php` does not work as is. It runs `composer self-update`, which
+fetches Composer 2.x and aborts on PHP 5.6. The path CI uses:
 
-    php composer.phar install        # Composer 1.10: o 2.x recusa o "phpunit/dbUnit" do 3.0
+    php composer.phar install        # Composer 1.10: 2.x rejects 3.0's "phpunit/dbUnit"
     php admin/tool/phpunit/cli/util.php --install
     php admin/tool/phpunit/cli/util.php --buildconfig
     vendor/bin/phpunit --testsuite local_resourcelinkfix_testsuite
 
-O locale `en_AU.UTF-8` precisa estar instalado (`sudo locale-gen en_AU.UTF-8`), senão o PHPUnit
-do Moodle recusa o ambiente.
+The `en_AU.UTF-8` locale must be installed (`sudo locale-gen en_AU.UTF-8`), or Moodle's PHPUnit
+refuses the environment.
 
-Rodar `vendor/bin/phpunit` apontando para o diretório `tests/` não executa nada: o PHPUnit
-procura `*Test.php`, e o Moodle usa `*_test.php`. Use a testsuite.
+Pointing `vendor/bin/phpunit` at the `tests/` directory runs nothing: PHPUnit looks for
+`*Test.php`, and Moodle uses `*_test.php`. Use the testsuite.
 
-`tests/fixtures/testable_plugin.php` é uma subclasse que substitui o construtor — a classe real
-só é instanciada pelo Moodle no meio de um restore — e expõe os métodos internos, evitando
-Reflection.
+`tests/fixtures/testable_plugin.php` is a subclass that replaces the constructor — the real
+class is only instantiated by Moodle in the middle of a restore — and exposes the internal
+methods, avoiding Reflection.
 
-Os testes de integração são os que importam para o ponto central do plugin: trocar o hook de
-`/module` para `/course` mantém todos os testes unitários verdes e derruba quatro dos de
-integração. O bug que motivou este plugin só aparece num restore de verdade.
+The integration tests are the ones that matter for the plugin's central point: switching the hook
+from `/module` to `/course` keeps every unit test green and breaks four of the integration ones.
+The bug that motivated this plugin only shows up in a real restore.
 
-## Padrão de código
+## Coding style
 
-A referência é o [Moodle Coding Style](https://moodledev.io/general/development/policies/codingstyle):
-identificadores em inglês, 4 espaços de indentação, linhas dentro de 132 colunas, sem `?>` final,
-cabeçalho GPL mais docblock com `@package`/`@copyright`/`@license`, e `defined('MOODLE_INTERNAL')`.
-Os comentários e o `lang/pt_br` estão em português.
+The reference is the [Moodle Coding Style](https://moodledev.io/general/development/policies/codingstyle):
+English identifiers, 4-space indentation, lines within 132 columns, no closing `?>`, GPL header
+plus a docblock with `@package`/`@copyright`/`@license`, and `defined('MOODLE_INTERNAL')`.
+Comments and `lang/pt_br` are in Portuguese.
 
-A conformidade ainda não é completa. O phpcs do CI aponta desvios de formatação (sintaxe de
-array, quebra de chamadas longas, indentação), e os métodos de teste têm nomes em português, o
-que o phpcs não detecta. Quando o relatório estiver limpo, o phpcs passa a falhar o job.
+Compliance is not complete yet. On 2026-09-23 CI's phpcs reported **332 errors and 14
+warnings**, almost all formatting (array syntax, wrapping of long calls, indentation); test
+method names are in Portuguese, which phpcs does not detect. A cleanup PR will bring the report
+to zero and make phpcs blocking.
 
-## Limitações
+## Limitations
 
-- Só trata `mod_resource`; o `id` precisa ser o primeiro parâmetro da URL
-  (`view.php?id=N`, não `view.php?x=1&id=N`).
-- Não reescreve `.css`, nem `.js` enquanto a opção correspondente estiver desligada.
-- Scripts que usam o id da **instância** em vez do cmid ficam de fora:
-  `mod/scorm/player.php?a=N`, `mod/data/edit.php?d=N`. Mapeá-los exigiria o
-  mapeamento por módulo, que é outro mecanismo.
-- Fora dos links de atividade/curso, o `wwwroot` antigo permanece: um
-  `pluginfile.php` ou `/user/view.php` do site de origem não é tocado.
-- **Host partido por hifenização não é corrigido.** Texto colado de PDF chega
-  com o domínio quebrado (`https:// site`, `exam- ple`, `site. org`). Como o
-  espaço impede ler a URL inteira, o link é preservado em vez de adivinhado.
-  Medido em uma instalação real: 6 ocorrências em 14.628 links.
-- **URL com espaço literal no caminho** (`https://site/pasta com espaco/mod/...`)
-  é lida como caminho relativo, e o id pode ser remapeado mesmo sendo de outro
-  site. Endereço com espaço é malformado — o correto é `%20`, que o plugin trata
-  normalmente. Fechar esse caso faria o plugin deixar de corrigir links
-  relativos precedidos de texto com `://`, que são mais comuns.
-- Links **relativos** para atividade que não veio no backup continuam
-  apontando para este site com um id alheio — não há host antigo a preservar.
-- Arquivos externos/alias (`is_external_file()`) são ignorados de propósito.
+- Only handles `mod_resource`; the `id` must be the first URL parameter
+  (`view.php?id=N`, not `view.php?x=1&id=N`).
+- Does not rewrite `.css`, nor `.js` while the corresponding option is off.
+- Scripts that use the **instance** id instead of the cmid are left out:
+  `mod/scorm/player.php?a=N`, `mod/data/edit.php?d=N`. Mapping them would need the per-module
+  mapping, which is a different mechanism.
+- Outside activity/course links, the old `wwwroot` remains: a `pluginfile.php` or
+  `/user/view.php` from the source site is not touched.
+- **A host split by hyphenation is not fixed.** Text pasted from a PDF arrives with the domain
+  broken (`https:// site`, `exam- ple`, `site. org`). Since the space prevents reading the whole
+  URL, the link is preserved rather than guessed. Measured on a real installation: 6 occurrences
+  in 14,628 links.
+- **A URL with a literal space in the path** (`https://site/folder with space/mod/...`) is read
+  as a relative path, and the id may be remapped even though it belongs to another site. An
+  address with a space is malformed — the correct form is `%20`, which the plugin handles
+  normally. Closing this case would stop the plugin from fixing relative links preceded by text
+  containing `://`, which are more common.
+- **Relative** links to an activity not in the backup keep pointing to this site with a foreign
+  id — there is no old host to preserve.
+- External files/aliases (`is_external_file()`) are ignored on purpose.
