@@ -3,8 +3,24 @@
 Versão em português: [LEIAME.md](LEIAME.md)
 
 Fixes, during restore, the links to activities inside HTML files of **File** resources
-(`mod_resource`). Requires Moodle 3.0 or later; tested on Moodle 3.0 (PHP 5.6) and 3.8
-(PHP 7.4).
+(`mod_resource`). Tested on Moodle 3.0 (PHP 5.6), 3.8 (PHP 7.4), 4.1 (PHP 8.0) and 4.5 (PHP 8.3),
+each on PostgreSQL and MySQL; each version has its own branch (see [Installation](#installation)).
+
+## Usage
+
+There is nothing to run. Once installed, the plugin acts on its own on every course **restore**
+and every activity **import** (*Course administration > Import*).
+
+To see it working:
+
+1. Back up a course with a File resource whose HTML links to another activity of the same
+   course (`mod/page/view.php?id=...`, for instance).
+2. Restore the backup as a new course.
+3. Open the resource in the new course and follow the link: it leads to the activity of the new
+   course. Without the plugin, it would still lead to the activity of the original course.
+
+To know in advance what it would change in your courses, use the [measuring
+tool](#measure-your-installation) or the simulation mode in the [settings](#settings).
 
 ## How it works
 
@@ -95,10 +111,50 @@ Simulation mode measures the impact on a real course before turning rewriting on
 and read the restore log. Use it before turning on the `.js` option, which touches **code**: a
 mistake in HTML breaks one link; in `.js` it can break the resource's navigation.
 
+### Seeing the restore log
+
+With Moodle's default settings, the restore log **discards** the plugin's messages about
+rewritten files and about the simulation: they have level `LOG_INFO`, and the default level is
+`LOG_WARNING` — raised only when *Debug messages* is set to DEVELOPER. Errors, and files the
+plugin refused to rewrite, are logged as `LOG_ERROR` or `LOG_WARNING` and always recorded.
+
+To record everything, add to `config.php`, before the `require_once` of `lib/setup.php`:
+
+    $CFG->backup_database_logger_level = 40; // The value of backup::LOG_INFO.
+
+After a restore, the messages are in the `backup_logs` table (with your table prefix). Those
+about rewritten files and about the simulation start with `local_resourcelinkfix`:
+
+    SELECT message FROM mdl_backup_logs WHERE message LIKE 'local_resourcelinkfix%';
+
 ## Installation
 
-Copy the folder to `local/resourcelinkfix` and run the upgrade from
-*Site administration > Notifications*.
+Use the branch that matches your Moodle version:
+
+| Moodle | Branch |
+|---|---|
+| 3.0 | `MOODLE_30_STABLE` |
+| 3.8 | `MOODLE_38_STABLE` |
+| 4.1 | `MOODLE_401_STABLE` |
+| 4.5 | `MOODLE_405_STABLE` |
+
+Each branch's `version.php` requires the Moodle version of that branch. Other versions have not
+been tested. `main` is the development branch.
+
+The plugin code is the same on all branches; only `version.php` and, from 4.1 on, the tests
+differ. The 4.x tests use `: void` and `assertStringContainsString()`, required by PHPUnit 9 and
+not accepted by PHP 5.6 (Moodle 3.0) and PHPUnit 4.8.
+
+From the Moodle root (example for 3.8):
+
+    git clone -b MOODLE_38_STABLE https://github.com/UFSC/local_resourcelinkfix.git local/resourcelinkfix
+
+or, if Moodle's code is itself a git repository and plugins are submodules:
+
+    git submodule add -b MOODLE_38_STABLE https://github.com/UFSC/local_resourcelinkfix.git local/resourcelinkfix
+
+Then run the upgrade from *Site administration > Notifications*, or
+`php admin/cli/upgrade.php`.
 
 ## Example
 
@@ -107,6 +163,9 @@ rule — the rewritten and the preserved, each with a comment on why. It serves 
 as material to reproduce the scenarios below.
 
 ## Scenarios verified on Moodle 3.0.5
+
+These were checked by hand on 3.0.5 only. On 3.8, 4.1 and 4.5, the same rules are covered by the
+automated suite, which includes real backups and restores (see [Testing](#testing)).
 
 - [x] Restore as a new course (`TARGET_NEW_COURSE`)
 - [x] Restore merging into an existing course (`TARGET_EXISTING_ADDING`)
@@ -133,7 +192,8 @@ goes red.
 
 ### Measure your installation
 
-The plugin ships the tool that produced the numbers below:
+The plugin ships a measuring tool. Run it from the Moodle root, as the web server user
+(`sudo -u www-data`, for instance):
 
     php local/resourcelinkfix/cli/measure_links.php --js
 
@@ -143,50 +203,17 @@ time. It accepts `--course=ID` to look at a single course and `--help` for the o
 
 Use it **before** turning on the `.js` option: it tells you in advance what will be touched.
 
-### Measurement on a real installation
-
-Numbers from a medium-sized Moodle 3.0 installation, reading file contents (not only the `files`
-table records) and scanning each whole file, as the plugin does:
-
-| | |
-|---|---|
-| Distinct HTML files in `mod_resource` | 4,968 |
-| Of these, with any link | 2,100 (42.3%) |
-| Activity links found | 14,628 |
-| — of which, pointing to **another** Moodle | 156 |
-| **Links in the plugin's scope** | **14,472** |
-| Rewritten | **14,458 (99.90%)** |
-| With `id` not in first position | **0** |
-| Outside the pattern (`edit.php?d=`, `user/view.php?course=`) | 14 (0.10%) |
-| | |
-| Distinct `.js` files | 2,214 |
-| Of these, with an activity link | 264 (11.9%) |
-| Links inside `.js` | 1,833 |
-| Literal URL, reachable | **1,827 (99.7%)** |
-| Built at run time | **0** |
-
-The 156 links to other Moodles are left out of the denominator on purpose: the plugin preserves
-them by design, and counting them as "not reached" would penalise it for following its own rule.
-They stay visible because they say something about the content — that it references other
-installations, which matters if those courses are ever migrated.
-
 ⚠️ **What "another Moodle" means depends on the backup.** The tool compares the link's host with
 the `wwwroot` of the site where it runs; the plugin, during a restore, compares it with that
 backup's `original_wwwroot`. The two match when backup and restore happen on the same site. When
 restoring a course from another installation, links to that installation stop being "another
-Moodle" and are rewritten, host and id — so the measurement made here underestimates the reach
-in that scenario.
-
-Adding HTML and `.js`: of the 16,305 links in scope, the plugin rewrites **88.7%** with the
-default settings and **99.9%** with the `.js` option on.
-
-The numbers hold for **that** content — the shape of links depends on how each team writes its
-material. Run `cli/measure_links.php --js` on your installation before drawing conclusions.
+Moodle" and are rewritten, host and id — so in that scenario the tool underestimates the reach.
 
 ## Testing
 
 The suite is self-contained: it does not depend on scripts, containers or the directory layout
-of whoever runs it. The same 46 tests run from Moodle 3.0 to 3.8.
+of whoever runs it. The same 46 tests run on Moodle 3.0, 3.8, 4.1 and 4.5 (adapted to PHPUnit 9
+on the 4.x branches).
 
 | File | Covers |
 |---|---|
@@ -279,8 +306,7 @@ needs PHP 7.1, and moodle-cs forbids `list()`. Use index access (`$a = $pair[0];
   `/user/view.php` from the source site is not touched.
 - **A host split by hyphenation is not fixed.** Text pasted from a PDF arrives with the domain
   broken (`https:// site`, `exam- ple`, `site. org`). Since the space prevents reading the whole
-  URL, the link is preserved rather than guessed. Measured on a real installation: 6 occurrences
-  in 14,628 links.
+  URL, the link is preserved rather than guessed.
 - **A URL with a literal space in the path** (`https://site/folder with space/mod/...`) is read
   as a relative path, and the id may be remapped even though it belongs to another site. An
   address with a space is malformed — the correct form is `%20`, which the plugin handles
