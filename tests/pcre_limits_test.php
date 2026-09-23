@@ -41,8 +41,9 @@ require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/testable_plu
  * @copyright  2026 UFSC
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @group      local_resourcelinkfix
+ * @covers     \restore_local_resourcelinkfix_plugin
  */
-class pcre_limits_test extends advanced_testcase {
+final class pcre_limits_test extends advanced_testcase {
     /** @var string Original value of pcre.backtrack_limit. */
     protected $backtrack;
 

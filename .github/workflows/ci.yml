@@ -3,8 +3,9 @@ name: Moodle Plugin CI
 on:
   push:
   pull_request:
-  # Weekly run on the default branch: catches breakage from new Moodle point releases and
-  # from moodle-plugin-ci, even when nobody commits.
+  # Weekly run: catches breakage from new Moodle point releases and from moodle-plugin-ci,
+  # even when nobody commits. GitHub only schedules the default branch; the stable-branches
+  # job below starts the same workflow on each MOODLE_XX_STABLE branch.
   schedule:
     - cron: '17 6 * * 1'
   workflow_dispatch:
@@ -15,9 +16,30 @@ permissions:
 env:
   # Versions tested on branches outside MOODLE_XX_STABLE (main, ci, feature branches).
   # Belongs to the plugin and is the same on all its branches. Codes: 30 38 401 405.
-  DEFAULT_VERSIONS: "30 38 405"
+  DEFAULT_VERSIONS: "30 38"
 
 jobs:
+  stable-branches:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Run this workflow on each MOODLE_XX_STABLE branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          branches="$(gh api "repos/$REPO/branches" --paginate -q '.[].name' | grep -E '^MOODLE_[0-9]+_STABLE$' || true)"
+          if [ -z "$branches" ]; then
+            echo "No MOODLE_XX_STABLE branch."; exit 0
+          fi
+          for b in $branches; do
+            echo "Starting CI on $b"
+            gh workflow run ci.yml -R "$REPO" --ref "$b"
+          done
+
   versions:
     runs-on: ubuntu-24.04
     outputs:
