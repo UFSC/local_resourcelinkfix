@@ -97,8 +97,14 @@ class local_resourcelinkfix_pcre_limits_testcase extends advanced_testcase {
         ini_set('pcre.backtrack_limit', '10');
 
         $plugin = $this->plugin();
-        $this->setExpectedException('moodle_exception');
-        $plugin->rewrite_file_for_test($this->conteudo_pesado());
+        // Sem setExpectedException() (removido no PHPUnit 6) nem expectException() (so a partir do 5.2):
+        // o try/catch roda do Moodle 3.0 (PHPUnit 4.8) ao 3.8 (PHPUnit 7.5).
+        try {
+            $plugin->rewrite_file_for_test($this->conteudo_pesado());
+            $this->fail('rewrite_file() gravou com o PCRE abortado; devia lancar moodle_exception');
+        } catch (moodle_exception $e) {
+            $this->assertInstanceOf('moodle_exception', $e);
+        }
     }
 
     /**
