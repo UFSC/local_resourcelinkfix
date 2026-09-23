@@ -1,11 +1,12 @@
-<!-- sync: README.md sha256=2cc96312f603a7c6188d5d30d1281522e49c681a69bf9a6039d149acd19b5940 -->
+<!-- sync: README.md sha256=f1da4a78c09992da4d8308732a151222789a524a6c50e7791b39c4852699970c -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
 
 Corrige, durante o restore, os links para atividades dentro de arquivos HTML de
-recursos do tipo **Arquivo** (`mod_resource`). Requer Moodle 3.0; testado somente no
-Moodle 3.0 (PHP 5.6) e no 3.8 (PHP 7.4).
+recursos do tipo **Arquivo** (`mod_resource`). Testado no Moodle 3.0 (PHP 5.6), 3.8 (PHP 7.4),
+4.1 (PHP 8.0) e 4.5 (PHP 8.3), cada um em PostgreSQL e MySQL; cada versão tem a sua branch (ver
+[Instalação](#instalação)).
 
 ## Uso
 
@@ -141,10 +142,17 @@ Use a branch correspondente à sua versão de Moodle:
 |---|---|
 | 3.0 | `MOODLE_30_STABLE` |
 | 3.8 | `MOODLE_38_STABLE` |
+| 4.1 | `MOODLE_401_STABLE` |
+| 4.5 | `MOODLE_405_STABLE` |
 
-As demais versões não foram testadas. A `main` é a branch de desenvolvimento.
+O `version.php` de cada branch exige a versão de Moodle daquela branch. As demais versões não
+foram testadas. A `main` é a branch de desenvolvimento.
 
-Na raiz do Moodle:
+O código do plugin é o mesmo em todas as branches; só o `version.php` e, a partir do 4.1, os
+testes diferem. Os testes do 4.x usam `: void` e `assertStringContainsString()`, exigidos pelo
+PHPUnit 9 e não aceitos pelo PHP 5.6 (Moodle 3.0) nem pelo PHPUnit 4.8.
+
+Na raiz do Moodle (exemplo para o 3.8):
 
     git clone -b MOODLE_38_STABLE https://github.com/UFSC/local_resourcelinkfix.git local/resourcelinkfix
 
@@ -163,8 +171,8 @@ Serve de referência e de material para reproduzir os cenários abaixo.
 
 ## Cenários verificados no Moodle 3.0.5
 
-Estes foram conferidos à mão somente no 3.0.5. No 3.8, as mesmas regras são cobertas pela suíte
-automatizada, que inclui backups e restores reais (ver [Testes](#testes)).
+Estes foram conferidos à mão somente no 3.0.5. No 3.8, no 4.1 e no 4.5, as mesmas regras são
+cobertas pela suíte automatizada, que inclui backups e restores reais (ver [Testes](#testes)).
 
 - [x] Restaurar como curso novo (`TARGET_NEW_COURSE`)
 - [x] Restaurar mesclando em curso existente (`TARGET_EXISTING_ADDING`)
@@ -245,7 +253,8 @@ o material. Rode `cli/measure_links.php --js` na sua instalação antes de tirar
 ## Testes
 
 A suíte é autocontida: não depende de script, container ou estrutura de diretórios de quem a
-executa. Os mesmos 46 testes rodam do Moodle 3.0 ao 3.8.
+executa. Os mesmos 46 testes rodam no Moodle 3.0, 3.8, 4.1 e 4.5 (adaptados ao PHPUnit 9 nas
+branches 4.x).
 
 | Arquivo | Cobre |
 |---|---|

@@ -3,7 +3,8 @@
 Versão em português: [LEIAME.md](LEIAME.md)
 
 Fixes, during restore, the links to activities inside HTML files of **File** resources
-(`mod_resource`). Requires Moodle 3.0; tested on Moodle 3.0 (PHP 5.6) and 3.8 (PHP 7.4) only.
+(`mod_resource`). Tested on Moodle 3.0 (PHP 5.6), 3.8 (PHP 7.4), 4.1 (PHP 8.0) and 4.5 (PHP 8.3),
+each on PostgreSQL and MySQL; each version has its own branch (see [Installation](#installation)).
 
 ## Usage
 
@@ -134,10 +135,17 @@ Use the branch that matches your Moodle version:
 |---|---|
 | 3.0 | `MOODLE_30_STABLE` |
 | 3.8 | `MOODLE_38_STABLE` |
+| 4.1 | `MOODLE_401_STABLE` |
+| 4.5 | `MOODLE_405_STABLE` |
 
-Other versions have not been tested. `main` is the development branch.
+Each branch's `version.php` requires the Moodle version of that branch. Other versions have not
+been tested. `main` is the development branch.
 
-From the Moodle root:
+The plugin code is the same on all branches; only `version.php` and, from 4.1 on, the tests
+differ. The 4.x tests use `: void` and `assertStringContainsString()`, required by PHPUnit 9 and
+not accepted by PHP 5.6 (Moodle 3.0) and PHPUnit 4.8.
+
+From the Moodle root (example for 3.8):
 
     git clone -b MOODLE_38_STABLE https://github.com/UFSC/local_resourcelinkfix.git local/resourcelinkfix
 
@@ -156,8 +164,8 @@ as material to reproduce the scenarios below.
 
 ## Scenarios verified on Moodle 3.0.5
 
-These were checked by hand on 3.0.5 only. On 3.8, the same rules are covered by the automated
-suite, which includes real backups and restores (see [Testing](#testing)).
+These were checked by hand on 3.0.5 only. On 3.8, 4.1 and 4.5, the same rules are covered by the
+automated suite, which includes real backups and restores (see [Testing](#testing)).
 
 - [x] Restore as a new course (`TARGET_NEW_COURSE`)
 - [x] Restore merging into an existing course (`TARGET_EXISTING_ADDING`)
@@ -238,7 +246,8 @@ material. Run `cli/measure_links.php --js` on your installation before drawing c
 ## Testing
 
 The suite is self-contained: it does not depend on scripts, containers or the directory layout
-of whoever runs it. The same 46 tests run from Moodle 3.0 to 3.8.
+of whoever runs it. The same 46 tests run on Moodle 3.0, 3.8, 4.1 and 4.5 (adapted to PHPUnit 9
+on the 4.x branches).
 
 | File | Covers |
 |---|---|
