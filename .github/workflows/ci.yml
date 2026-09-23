@@ -1,0 +1,239 @@
+name: Moodle Plugin CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+env:
+  # Versions tested on branches outside MOODLE_XX_STABLE (main, ci, feature branches).
+  # Belongs to the plugin and is the same on all its branches. Codes: 30 38 401 405.
+  DEFAULT_VERSIONS: "30 38"
+
+jobs:
+  versions:
+    runs-on: ubuntu-24.04
+    outputs:
+      run30: ${{ steps.pick.outputs.run30 }}
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - name: Pick Moodle versions from branch
+        id: pick
+        env:
+          BRANCH: ${{ github.base_ref || github.ref_name }}
+        run: |
+          case "$BRANCH" in
+            MOODLE_30_STABLE) list="30" ;;
+            MOODLE_38_STABLE) list="38" ;;
+            MOODLE_401_STABLE) list="401" ;;
+            MOODLE_405_STABLE) list="405" ;;
+            *) list="$DEFAULT_VERSIONS" ;;
+          esac
+          run30=false
+          include=""
+          seen=" "
+          for v in $list; do
+            case "$seen" in *" $v "*) echo "::error::duplicate version: $v"; exit 1 ;; esac
+            seen="$seen$v "
+            case "$v" in
+              30) run30=true; continue ;;
+              38) entry='{"moodle":"MOODLE_38_STABLE","php":"7.4","pg":"postgres:13"}' ;;
+              401) entry='{"moodle":"MOODLE_401_STABLE","php":"8.0","pg":"postgres:13"}' ;;
+              405) entry='{"moodle":"MOODLE_405_STABLE","php":"8.3","pg":"postgres:13"}' ;;
+              *) echo "::error::unknown version code: $v (use 30, 38, 401, 405)"; exit 1 ;;
+            esac
+            include="${include:+$include,}$entry"
+          done
+          if [ "$run30" = false ] && [ -z "$include" ]; then
+            echo "::error::no Moodle version to test on branch $BRANCH"; exit 1
+          fi
+          echo "run30=$run30" >> "$GITHUB_OUTPUT"
+          echo "matrix={\"include\":[$include]}" >> "$GITHUB_OUTPUT"
+          echo "Branch $BRANCH -> versions: $list"
+
+  moodle-plugin-ci:
+    needs: versions
+    if: ${{ needs.versions.outputs.matrix != '{"include":[]}' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.versions.outputs.matrix) }}
+
+    services:
+      postgres:
+        image: ${{ matrix.pg }}
+        env:
+          POSTGRES_USER: 'postgres'
+          POSTGRES_HOST_AUTH_METHOD: 'trust'
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 3
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+        with:
+          path: plugin
+          persist-credentials: false
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          ini-values: max_input_vars=5000, opcache.enable_cli=1
+          coverage: none
+
+      - name: Initialise moodle-plugin-ci
+        run: |
+          composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^4
+          echo "$(cd ci/bin; pwd)" >> "$GITHUB_PATH"
+          echo "$(cd ci/vendor/bin; pwd)" >> "$GITHUB_PATH"
+          sudo locale-gen en_AU.UTF-8
+          echo "NVM_DIR=$HOME/.nvm" >> "$GITHUB_ENV"
+
+      - name: Install moodle-plugin-ci
+        run: moodle-plugin-ci install --plugin ./plugin --db-host=127.0.0.1
+        env:
+          DB: pgsql
+          MOODLE_BRANCH: ${{ matrix.moodle }}
+
+      - name: PHP Lint
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phplint
+
+      - name: PHP Mess Detector
+        continue-on-error: true # Advisory only.
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phpmd
+
+      # ADOPTION: advisory until the cleanup PR; that PR removes both continue-on-error lines.
+      - name: Moodle Code Checker
+        continue-on-error: true
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phpcs --max-warnings 0
+
+      - name: Moodle PHPDoc Checker
+        continue-on-error: true
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phpdoc --max-warnings 0
+
+      - name: Validating
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci validate
+
+      - name: Check upgrade savepoints
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci savepoints
+
+      - name: PHPUnit tests
+        if: ${{ !cancelled() }}
+        run: moodle-plugin-ci phpunit --fail-on-warning
+
+      - name: Mark cancelled jobs as failed.
+        if: ${{ cancelled() }}
+        run: exit 1
+
+  # moodle-plugin-ci does not support Moodle 3.0 (minimum 3.2): PHPUnit only, set up by hand.
+  # Coding style is checked by the moodle-plugin-ci job; the code is the same.
+  moodle30:
+    needs: versions
+    if: ${{ needs.versions.outputs.run30 == 'true' }}
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        image: postgres:9.6
+        env:
+          POSTGRES_USER: 'postgres'
+          POSTGRES_HOST_AUTH_METHOD: 'trust'
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 3
+
+    steps:
+      - name: Setup PHP 5.6
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '5.6'
+          extensions: pgsql, zip, gd, intl, xmlrpc, soap
+          ini-values: max_input_vars=5000
+          # Composer 1: 2.x rejects "phpunit/dbUnit" in Moodle 3.0's composer.json and, once
+          # that is fixed, segfaults on exit under PHP 5.6. install reads URLs from composer.lock.
+          tools: composer:v1
+          coverage: none
+
+      - name: Install locale en_AU.UTF-8
+        run: sudo locale-gen en_AU.UTF-8
+
+      - name: Check out Moodle 3.0
+        run: git clone --depth 1 --branch MOODLE_30_STABLE https://github.com/moodle/moodle.git moodle
+
+      - name: Check out repository code
+        uses: actions/checkout@v6
+        with:
+          path: moodle/local/resourcelinkfix
+          persist-credentials: false
+
+      - name: Install Moodle dependencies
+        working-directory: moodle
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Write config.php
+        working-directory: moodle
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/moodledata" "$GITHUB_WORKSPACE/phpu_moodledata"
+          cat > config.php <<EOF
+          <?php
+          unset(\$CFG);
+          global \$CFG;
+          \$CFG = new stdClass();
+          \$CFG->dbtype = 'pgsql';
+          \$CFG->dblibrary = 'native';
+          \$CFG->dbhost = '127.0.0.1';
+          \$CFG->dbname = 'postgres';
+          \$CFG->dbuser = 'postgres';
+          \$CFG->dbpass = '';
+          \$CFG->prefix = 'mdl_';
+          \$CFG->dboptions = array();
+          \$CFG->wwwroot = 'http://localhost';
+          \$CFG->dataroot = '$GITHUB_WORKSPACE/moodledata';
+          \$CFG->directorypermissions = 02777;
+          \$CFG->phpunit_prefix = 'phpu_';
+          \$CFG->phpunit_dataroot = '$GITHUB_WORKSPACE/phpu_moodledata';
+          require_once(__DIR__ . '/lib/setup.php');
+          EOF
+
+      # Not init.php: on 3.0 it runs "composer self-update", which fetches Composer 2.x and
+      # aborts under PHP 5.6. Dependencies are already installed; this is what init.php does next.
+      - name: Initialise PHPUnit
+        working-directory: moodle
+        run: |
+          php admin/tool/phpunit/cli/util.php --install
+          php admin/tool/phpunit/cli/util.php --buildconfig
+
+      - name: PHPUnit tests
+        working-directory: moodle
+        run: vendor/bin/phpunit --testsuite local_resourcelinkfix_testsuite
+
+  leiame:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: LEIAME.md in sync with README.md
+        run: |
+          if [ ! -f LEIAME.md ]; then
+            echo "::error::LEIAME.md missing"; exit 1
+          fi
+          expected="$(sha256sum README.md | cut -d' ' -f1)"
+          recorded="$(head -n 1 LEIAME.md | sed -n 's/^<!-- sync: README.md sha256=\([0-9a-f]\{64\}\) -->$/\1/p')"
+          if [ -z "$recorded" ]; then
+            echo "::error file=LEIAME.md,line=1::first line must be <!-- sync: README.md sha256=<64 hex> -->"; exit 1
+          fi
+          if [ "$recorded" != "$expected" ]; then
+            echo "::error file=LEIAME.md,line=1::LEIAME.md is out of date: translate the README.md changes, then run leiame-hash.sh"; exit 1
+          fi
+          echo "LEIAME.md in sync with README.md ($expected)"
