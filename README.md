@@ -113,12 +113,20 @@ mistake in HTML breaks one link; in `.js` it can break the resource's navigation
 
 ### Seeing the restore log
 
-With Moodle's default settings, the restore log **discards** the plugin's messages about
-rewritten files and about the simulation: they have level `LOG_INFO`, and the default level is
-`LOG_WARNING` — raised only when *Debug messages* is set to DEVELOPER. Errors, and files the
-plugin refused to rewrite, are logged as `LOG_ERROR` or `LOG_WARNING` and always recorded.
+Moodle records restore messages from level `LOG_WARNING` up by default (from `LOG_DEBUG` when
+*Debug messages* is set to DEVELOPER). The plugin logs:
 
-To record everything, add to `config.php`, before the `require_once` of `lib/setup.php`:
+| Message | Level | Recorded by default |
+|---|---|---|
+| Simulation: which files *would* be rewritten | `LOG_WARNING` | yes |
+| Errors, and files the plugin refused to rewrite | `LOG_ERROR` or `LOG_WARNING` | yes |
+| Files rewritten in a normal restore | `LOG_INFO` | no — so a restore does not flood the log |
+
+The default level applies to the web server's PHP error log too: with the simulation on, its
+lines also show up there.
+
+To record the rewritten files as well, add to `config.php`, before the `require_once` of
+`lib/setup.php`:
 
     $CFG->backup_database_logger_level = 40; // The value of backup::LOG_INFO.
 
@@ -183,7 +191,7 @@ automated suite, which includes real backups and restores (see [Testing](#testin
 - [x] Link to a THIRD site: host and id untouched
 - [x] Backup without `original_wwwroot`: absolute links untouched
 - [x] Disabled: no file is touched
-- [x] Simulation mode: logs the count and does not write
+- [x] Simulation mode: logs the count and does not write (also automated, in `restore_test.php`)
 
 The scenarios above were exercised with **sample material** built to cover each rule, through
 `backup_controller`/`restore_controller` on Moodle 3.0.5. Each behaviour has its own test, and

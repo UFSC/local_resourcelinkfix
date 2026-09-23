@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=e742c733d50e5239b01979b5d23e83658b01914a43dda8c4ac6e69e8aa2a00c8 -->
+<!-- sync: README.md sha256=0adb26e300d0d3f79a728030de62b359b9568489fcb7c3f1aa3624cbcaec2340 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -119,13 +119,20 @@ em **código**: um erro no HTML estraga um link, no `.js` pode quebrar a navega�
 
 ### Como ver o log do restore
 
-Com a configuração padrão do Moodle, o log do restore **descarta** as mensagens do plugin sobre
-arquivos reescritos e sobre a simulação: elas têm nível `LOG_INFO`, e o nível padrão é
-`LOG_WARNING` — que só sobe quando as *Mensagens de depuração* estão em DESENVOLVEDOR. Os erros,
-e os arquivos que o plugin se recusou a reescrever, saem como `LOG_ERROR` ou `LOG_WARNING` e são
-sempre registrados.
+Por padrão, o Moodle registra as mensagens do restore a partir do nível `LOG_WARNING` (a partir
+de `LOG_DEBUG` quando as *Mensagens de depuração* estão em DESENVOLVEDOR). O plugin registra:
 
-Para registrar tudo, acrescente ao `config.php`, antes do `require_once` de `lib/setup.php`:
+| Mensagem | Nível | Registrada por padrão |
+|---|---|---|
+| Simulação: quais arquivos *seriam* reescritos | `LOG_WARNING` | sim |
+| Erros, e arquivos que o plugin se recusou a reescrever | `LOG_ERROR` ou `LOG_WARNING` | sim |
+| Arquivos reescritos num restore normal | `LOG_INFO` | não — para um restore não encher o log |
+
+O nível padrão vale também para o log de erros do PHP do servidor web: com a simulação ligada, as
+linhas dela aparecem lá também.
+
+Para registrar também os arquivos reescritos, acrescente ao `config.php`, antes do `require_once`
+de `lib/setup.php`:
 
     $CFG->backup_database_logger_level = 40; // The value of backup::LOG_INFO.
 
@@ -190,7 +197,7 @@ cobertas pela suíte automatizada, que inclui backups e restores reais (ver [Tes
 - [x] Link para um TERCEIRO site: host e id intactos
 - [x] Backup sem `original_wwwroot`: links absolutos intactos
 - [x] Desativado: nenhum arquivo é tocado
-- [x] Modo simulação: registra a contagem no log e não grava
+- [x] Modo simulação: registra a contagem no log e não grava (também automatizado, em `restore_test.php`)
 
 Os cenários acima foram exercitados com **material de exemplo** construído para cobrir cada
 regra, por `backup_controller`/`restore_controller` em um Moodle 3.0.5. Cada comportamento tem
