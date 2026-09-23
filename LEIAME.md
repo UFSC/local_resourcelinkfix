@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=0ae081cf0cb1740f6b155df2efeb39bc9f399e676d63199c62c362ecc4cb97e4 -->
+<!-- sync: README.md sha256=1243e88f8ff9c51bd37285561c0b5a2a2f0b43630fa221eaf323929de650882b -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -202,13 +202,14 @@ executa. Os mesmos 46 testes rodam do Moodle 3.0 ao 3.8.
 
 ### Integração contínua
 
-A cada push e pull request, o GitHub Actions (`.github/workflows/ci.yml`) testa o plugin num
-Moodle limpo:
+A cada push e pull request, e semanalmente na `main` (segundas, 06:17 UTC), o GitHub Actions
+(`.github/workflows/ci.yml`) testa o plugin num Moodle limpo. Também pode ser disparado à mão
+(*Actions > Moodle Plugin CI > Run workflow*).
 
 | Job | Moodle | PHP | O que roda |
 |---|---|---|---|
-| `versions` | — | — | Escolhe as versões pela branch: `MOODLE_30_STABLE` → 3.0, `MOODLE_38_STABLE` → 3.8; as demais (`main`, branches de trabalho) → `DEFAULT_VERSIONS`, hoje `30 38` |
-| `moodle-plugin-ci` | 3.8 | 7.4 | [moodle-plugin-ci](https://moodlehq.github.io/moodle-plugin-ci/) 4.x: PHPUnit, lint, validação, savepoints, Coding Style (phpcs), PHPDoc e phpmd |
+| `versions` | — | — | Escolhe as versões pela branch: `MOODLE_30_STABLE` → 3.0, `MOODLE_38_STABLE` → 3.8; as demais (`main`, branches de trabalho) → `DEFAULT_VERSIONS`, hoje `30 38 405` |
+| `moodle-plugin-ci` | 3.8, 4.5 | 7.4, 8.3 | [moodle-plugin-ci](https://moodlehq.github.io/moodle-plugin-ci/) 4.x: PHPUnit, lint, validação, savepoints, Coding Style (phpcs), PHPDoc e phpmd |
 | `moodle30` | 3.0 | 5.6 | Só PHPUnit, com o ambiente montado à mão |
 | `leiame` | — | — | Este `LEIAME.md` corresponde ao `README.md` atual (hash na primeira linha) |
 

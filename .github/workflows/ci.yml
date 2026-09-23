@@ -1,6 +1,13 @@
 name: Moodle Plugin CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  # Weekly run on the default branch: catches breakage from new Moodle point releases and
+  # from moodle-plugin-ci, even when nobody commits.
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -8,7 +15,7 @@ permissions:
 env:
   # Versions tested on branches outside MOODLE_XX_STABLE (main, ci, feature branches).
   # Belongs to the plugin and is the same on all its branches. Codes: 30 38 401 405.
-  DEFAULT_VERSIONS: "30 38"
+  DEFAULT_VERSIONS: "30 38 405"
 
 jobs:
   versions:
