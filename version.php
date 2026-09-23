@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_resourcelinkfix';
-$plugin->version   = 2026092300;
+$plugin->version   = 2026092301;
 $plugin->requires  = 2022112800; // Moodle 4.1.
 $plugin->maturity  = MATURITY_BETA;
 $plugin->release   = '0.1';
