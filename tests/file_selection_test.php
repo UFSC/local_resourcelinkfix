@@ -39,8 +39,9 @@ require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/testable_plu
  * @copyright  2026 UFSC
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @group      local_resourcelinkfix
+ * @covers     \restore_local_resourcelinkfix_plugin
  */
-class file_selection_test extends advanced_testcase {
+final class file_selection_test extends advanced_testcase {
     /**
      * Builds a plugin instance with the given .js setting.
      *

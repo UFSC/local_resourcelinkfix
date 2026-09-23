@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=14789da5e6099b779c54cce869e21a6c38f97b11dbac43054887b47a768eeae5 -->
+<!-- sync: README.md sha256=2cc96312f603a7c6188d5d30d1281522e49c681a69bf9a6039d149acd19b5940 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -256,15 +256,20 @@ executa. Os mesmos 46 testes rodam do Moodle 3.0 ao 3.8.
 
 ### Integração contínua
 
-A cada push e pull request, o GitHub Actions (`.github/workflows/ci.yml`) testa o plugin num
-Moodle limpo:
+A cada push e pull request, e semanalmente (segundas, 06:17 UTC) na `main` e em cada branch
+`MOODLE_XX_STABLE`, o GitHub Actions (`.github/workflows/ci.yml`) testa o plugin num Moodle
+limpo. Também pode ser disparado à mão
+(*Actions > Moodle Plugin CI > Run workflow*).
 
 | Job | Moodle | PHP | O que roda |
 |---|---|---|---|
-| `versions` | — | — | Escolhe as versões pela branch: `MOODLE_30_STABLE` → 3.0, `MOODLE_38_STABLE` → 3.8; as demais (`main`, branches de trabalho) → `DEFAULT_VERSIONS`, hoje `30 38` |
-| `moodle-plugin-ci` | 3.8 | 7.4 | [moodle-plugin-ci](https://moodlehq.github.io/moodle-plugin-ci/) 4.x: PHPUnit, lint, validação, savepoints, Coding Style (phpcs), PHPDoc e phpmd |
+| `versions` | — | — | Escolhe as versões pela branch: `MOODLE_30_STABLE` → 3.0, `MOODLE_38_STABLE` → 3.8, `MOODLE_405_STABLE` → 4.5; as demais (`main`, branches de trabalho) → `DEFAULT_VERSIONS`, hoje `30 38` |
+| `moodle-plugin-ci` | 3.8 ou 4.5 | 7.4 ou 8.3 | [moodle-plugin-ci](https://moodlehq.github.io/moodle-plugin-ci/) 4.x: PHPUnit, lint, validação, savepoints, Coding Style (phpcs), PHPDoc e phpmd |
 | `moodle30` | 3.0 | 5.6 | Só PHPUnit, com o ambiente montado à mão |
 | `leiame` | — | — | Este `LEIAME.md` corresponde ao `README.md` atual (hash na primeira linha) |
+
+Os jobs de Moodle rodam duas vezes, uma por banco: PostgreSQL (13; 9.6 no 3.0) e MySQL (5.6
+no 3.0 e no 3.8, 8.0 no 4.1 e no 4.5).
 
 O moodle-plugin-ci não aceita Moodle anterior ao 3.2 (e a 4.x, anterior ao 3.8.3), por isso o
 job do 3.0 não usa a ferramenta. As normas verificadas no 3.8 valem para o 3.0: o código é o

@@ -249,15 +249,20 @@ of whoever runs it. The same 46 tests run from Moodle 3.0 to 3.8.
 
 ### Continuous integration
 
-On every push and pull request, GitHub Actions (`.github/workflows/ci.yml`) tests the plugin on a
-clean Moodle:
+On every push and pull request, and weekly (Mondays, 06:17 UTC) on `main` and on every
+`MOODLE_XX_STABLE` branch, GitHub Actions (`.github/workflows/ci.yml`) tests the plugin on a
+clean Moodle. It can also be started by hand
+(*Actions > Moodle Plugin CI > Run workflow*).
 
 | Job | Moodle | PHP | Runs |
 |---|---|---|---|
-| `versions` | — | — | Picks versions from the branch: `MOODLE_30_STABLE` → 3.0, `MOODLE_38_STABLE` → 3.8; any other (`main`, work branches) → `DEFAULT_VERSIONS`, currently `30 38` |
-| `moodle-plugin-ci` | 3.8 | 7.4 | [moodle-plugin-ci](https://moodlehq.github.io/moodle-plugin-ci/) 4.x: PHPUnit, lint, validate, savepoints, coding style (phpcs), PHPDoc and phpmd |
+| `versions` | — | — | Picks versions from the branch: `MOODLE_30_STABLE` → 3.0, `MOODLE_38_STABLE` → 3.8, `MOODLE_405_STABLE` → 4.5; any other (`main`, work branches) → `DEFAULT_VERSIONS`, currently `30 38` |
+| `moodle-plugin-ci` | 3.8 or 4.5 | 7.4 or 8.3 | [moodle-plugin-ci](https://moodlehq.github.io/moodle-plugin-ci/) 4.x: PHPUnit, lint, validate, savepoints, coding style (phpcs), PHPDoc and phpmd |
 | `moodle30` | 3.0 | 5.6 | PHPUnit only, with the environment set up by hand |
 | `leiame` | — | — | `LEIAME.md` matches the current `README.md` (hash on its first line) |
+
+The Moodle jobs run twice, once per database: PostgreSQL (13; 9.6 for 3.0) and MySQL (5.6
+for 3.0 and 3.8, 8.0 for 4.1 and 4.5).
 
 moodle-plugin-ci does not support Moodle before 3.2 (and 4.x, before 3.8.3), so the 3.0 job does
 not use it. The standards checked on 3.8 hold for 3.0: the code is the same. phpcs and PHPDoc

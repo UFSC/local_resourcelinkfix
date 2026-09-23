@@ -24,33 +24,6 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$string['pluginname'] = 'Resource link fix (restore)';
-$string['privacy:metadata'] = 'The plugin does not store any personal data.';
-
-$string['enabled'] = 'Enabled';
-$string['enabled_desc'] = 'Rewrite activity links inside the HTML files of File resources
-(mod_resource) during restore. When disabled, the plugin does nothing and restore behaves
-exactly as it would without it.';
-
-$string['rewritejs'] = 'Also rewrite .js files';
-$string['rewritejs_desc'] = 'Rewrite links inside <code>.js</code> files as well, not only HTML.
-Only complete URLs with a numeric id are touched, so links built at run time
-(<code>\'view.php?id=\' + cmid</code>) are never altered. A .js file is code: measure the impact
-with simulation mode before enabling this.';
-
-$string['dryrun'] = 'Simulation mode (do not write)';
-$string['dryrun_desc'] = 'Only report, in the restore log, which files <em>would</em> be
-rewritten and how many links each one has. No file is changed. Useful for measuring the
-impact on a real course before enabling the rewrite.';
-
-$string['logrewritten'] = 'local_resourcelinkfix: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) rewritten';
-$string['logdryrun'] = 'local_resourcelinkfix [SIMULATION]: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) would be rewritten';
-$string['errorpcre'] = 'The regular expression engine gave up on this file (PCRE error {$a}); the file was left untouched.';
-
-$string['errorcontentlost'] = 'Content loss prevented in {$a->file} (cmid {$a->cmid}): the rewrite changed more than the links'
-    . ' ({$a->oldsize} bytes before, {$a->newsize} after). The file was left untouched; both versions'
-    . ' follow in the log.';
-
 $string['cli_covered'] = 'reached by the plugin';
 $string['cli_examples'] = 'examples:';
 $string['cli_examplesof'] = 'examples, {$a}:';
@@ -96,3 +69,24 @@ $string['cli_resourcescourse'] = 'Resources analysed (course {$a})';
 $string['cli_resourcessite'] = 'Resources analysed (whole site)';
 $string['cli_topscripts'] = 'most linked scripts:';
 $string['cli_total'] = 'total';
+$string['dryrun'] = 'Simulation mode (do not write)';
+$string['dryrun_desc'] = 'Only report, in the restore log, which files <em>would</em> be
+rewritten and how many links each one has. No file is changed. Useful for measuring the
+impact on a real course before enabling the rewrite.';
+$string['enabled'] = 'Enabled';
+$string['enabled_desc'] = 'Rewrite activity links inside the HTML files of File resources
+(mod_resource) during restore. When disabled, the plugin does nothing and restore behaves
+exactly as it would without it.';
+$string['errorcontentlost'] = 'Content loss prevented in {$a->file} (cmid {$a->cmid}): the rewrite changed more than the links'
+    . ' ({$a->oldsize} bytes before, {$a->newsize} after). The file was left untouched; both versions'
+    . ' follow in the log.';
+$string['errorpcre'] = 'The regular expression engine gave up on this file (PCRE error {$a}); the file was left untouched.';
+$string['logdryrun'] = 'local_resourcelinkfix [SIMULATION]: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) would be rewritten';
+$string['logrewritten'] = 'local_resourcelinkfix: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) rewritten';
+$string['pluginname'] = 'Resource link fix (restore)';
+$string['privacy:metadata'] = 'The plugin does not store any personal data.';
+$string['rewritejs'] = 'Also rewrite .js files';
+$string['rewritejs_desc'] = 'Rewrite links inside <code>.js</code> files as well, not only HTML.
+Only complete URLs with a numeric id are touched, so links built at run time
+(<code>\'view.php?id=\' + cmid</code>) are never altered. A .js file is code: measure the impact
+with simulation mode before enabling this.';

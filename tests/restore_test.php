@@ -48,8 +48,9 @@ require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
  * @copyright  2026 UFSC
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @group      local_resourcelinkfix
+ * @covers     \restore_local_resourcelinkfix_plugin
  */
-class restore_test extends advanced_testcase {
+final class restore_test extends advanced_testcase {
     /**
      * Creates a course with an activity and a resource whose HTML and JS
      * point to it.
