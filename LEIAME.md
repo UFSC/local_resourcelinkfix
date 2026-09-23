@@ -1,11 +1,27 @@
-<!-- sync: README.md sha256=0ae081cf0cb1740f6b155df2efeb39bc9f399e676d63199c62c362ecc4cb97e4 -->
+<!-- sync: README.md sha256=14789da5e6099b779c54cce869e21a6c38f97b11dbac43054887b47a768eeae5 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
 
 Corrige, durante o restore, os links para atividades dentro de arquivos HTML de
-recursos do tipo **Arquivo** (`mod_resource`). Requer Moodle 3.0 ou superior; testado no
+recursos do tipo **Arquivo** (`mod_resource`). Requer Moodle 3.0; testado somente no
 Moodle 3.0 (PHP 5.6) e no 3.8 (PHP 7.4).
+
+## Uso
+
+Não há nada a executar. Depois de instalado, o plugin age sozinho em todo **restore** de curso
+e em toda **importação** de atividades (*Administração do curso > Importar*).
+
+Para vê-lo funcionando:
+
+1. Faça o backup de um curso com um recurso do tipo Arquivo cujo HTML tenha link para outra
+   atividade do mesmo curso (`mod/page/view.php?id=...`, por exemplo).
+2. Restaure o backup como curso novo.
+3. Abra o recurso no curso novo e siga o link: ele leva à atividade do curso novo. Sem o
+   plugin, continuaria levando à atividade do curso original.
+
+Para saber de antemão o que ele mudaria nos seus cursos, use a [ferramenta de
+medição](#meça-a-sua-instalação) ou o modo simulação da [configuração](#configuração).
 
 ## Como funciona
 
@@ -100,10 +116,44 @@ A simulação serve para medir o impacto em um curso real antes de ligar a reesc
 ela marcada e leia o log do restore. Recomenda-se usá-la antes de ligar a opção `.js`, que mexe
 em **código**: um erro no HTML estraga um link, no `.js` pode quebrar a navegação do recurso.
 
+### Como ver o log do restore
+
+Com a configuração padrão do Moodle, o log do restore **descarta** as mensagens do plugin sobre
+arquivos reescritos e sobre a simulação: elas têm nível `LOG_INFO`, e o nível padrão é
+`LOG_WARNING` — que só sobe quando as *Mensagens de depuração* estão em DESENVOLVEDOR. Os erros,
+e os arquivos que o plugin se recusou a reescrever, saem como `LOG_ERROR` ou `LOG_WARNING` e são
+sempre registrados.
+
+Para registrar tudo, acrescente ao `config.php`, antes do `require_once` de `lib/setup.php`:
+
+    $CFG->backup_database_logger_level = 40; // The value of backup::LOG_INFO.
+
+Depois de um restore, as mensagens ficam na tabela `backup_logs` (com o prefixo das suas
+tabelas). As de arquivos reescritos e as da simulação começam com `local_resourcelinkfix`:
+
+    SELECT message FROM mdl_backup_logs WHERE message LIKE 'local_resourcelinkfix%';
+
 ## Instalação
 
-Copiar a pasta para `local/resourcelinkfix` e rodar a atualização em
-*Administração do site > Notificações*.
+Use a branch correspondente à sua versão de Moodle:
+
+| Moodle | Branch |
+|---|---|
+| 3.0 | `MOODLE_30_STABLE` |
+| 3.8 | `MOODLE_38_STABLE` |
+
+As demais versões não foram testadas. A `main` é a branch de desenvolvimento.
+
+Na raiz do Moodle:
+
+    git clone -b MOODLE_38_STABLE https://github.com/UFSC/local_resourcelinkfix.git local/resourcelinkfix
+
+ou, se o código do Moodle é ele próprio um repositório git e os plugins são submódulos:
+
+    git submodule add -b MOODLE_38_STABLE https://github.com/UFSC/local_resourcelinkfix.git local/resourcelinkfix
+
+Depois, rode a atualização em *Administração do site > Notificações*, ou
+`php admin/cli/upgrade.php`.
 
 ## Exemplo
 
@@ -112,6 +162,9 @@ um caso de cada regra — os reescritos e os preservados, cada um com o comentá
 Serve de referência e de material para reproduzir os cenários abaixo.
 
 ## Cenários verificados no Moodle 3.0.5
+
+Estes foram conferidos à mão somente no 3.0.5. No 3.8, as mesmas regras são cobertas pela suíte
+automatizada, que inclui backups e restores reais (ver [Testes](#testes)).
 
 - [x] Restaurar como curso novo (`TARGET_NEW_COURSE`)
 - [x] Restaurar mesclando em curso existente (`TARGET_EXISTING_ADDING`)
@@ -138,7 +191,8 @@ propósito para confirmar que o teste fica vermelho.
 
 ### Meça a sua instalação
 
-O plugin traz a ferramenta que produziu os números abaixo:
+O plugin traz a ferramenta que produziu os números abaixo. Rode-a na raiz do Moodle, como o
+usuário do servidor web (`sudo -u www-data`, por exemplo):
 
     php local/resourcelinkfix/cli/measure_links.php --js
 

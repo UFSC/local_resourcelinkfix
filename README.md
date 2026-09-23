@@ -3,8 +3,23 @@
 Versão em português: [LEIAME.md](LEIAME.md)
 
 Fixes, during restore, the links to activities inside HTML files of **File** resources
-(`mod_resource`). Requires Moodle 3.0 or later; tested on Moodle 3.0 (PHP 5.6) and 3.8
-(PHP 7.4).
+(`mod_resource`). Requires Moodle 3.0; tested on Moodle 3.0 (PHP 5.6) and 3.8 (PHP 7.4) only.
+
+## Usage
+
+There is nothing to run. Once installed, the plugin acts on its own on every course **restore**
+and every activity **import** (*Course administration > Import*).
+
+To see it working:
+
+1. Back up a course with a File resource whose HTML links to another activity of the same
+   course (`mod/page/view.php?id=...`, for instance).
+2. Restore the backup as a new course.
+3. Open the resource in the new course and follow the link: it leads to the activity of the new
+   course. Without the plugin, it would still lead to the activity of the original course.
+
+To know in advance what it would change in your courses, use the [measuring
+tool](#measure-your-installation) or the simulation mode in the [settings](#settings).
 
 ## How it works
 
@@ -95,10 +110,43 @@ Simulation mode measures the impact on a real course before turning rewriting on
 and read the restore log. Use it before turning on the `.js` option, which touches **code**: a
 mistake in HTML breaks one link; in `.js` it can break the resource's navigation.
 
+### Seeing the restore log
+
+With Moodle's default settings, the restore log **discards** the plugin's messages about
+rewritten files and about the simulation: they have level `LOG_INFO`, and the default level is
+`LOG_WARNING` — raised only when *Debug messages* is set to DEVELOPER. Errors, and files the
+plugin refused to rewrite, are logged as `LOG_ERROR` or `LOG_WARNING` and always recorded.
+
+To record everything, add to `config.php`, before the `require_once` of `lib/setup.php`:
+
+    $CFG->backup_database_logger_level = 40; // The value of backup::LOG_INFO.
+
+After a restore, the messages are in the `backup_logs` table (with your table prefix). Those
+about rewritten files and about the simulation start with `local_resourcelinkfix`:
+
+    SELECT message FROM mdl_backup_logs WHERE message LIKE 'local_resourcelinkfix%';
+
 ## Installation
 
-Copy the folder to `local/resourcelinkfix` and run the upgrade from
-*Site administration > Notifications*.
+Use the branch that matches your Moodle version:
+
+| Moodle | Branch |
+|---|---|
+| 3.0 | `MOODLE_30_STABLE` |
+| 3.8 | `MOODLE_38_STABLE` |
+
+Other versions have not been tested. `main` is the development branch.
+
+From the Moodle root:
+
+    git clone -b MOODLE_38_STABLE https://github.com/UFSC/local_resourcelinkfix.git local/resourcelinkfix
+
+or, if Moodle's code is itself a git repository and plugins are submodules:
+
+    git submodule add -b MOODLE_38_STABLE https://github.com/UFSC/local_resourcelinkfix.git local/resourcelinkfix
+
+Then run the upgrade from *Site administration > Notifications*, or
+`php admin/cli/upgrade.php`.
 
 ## Example
 
@@ -107,6 +155,9 @@ rule — the rewritten and the preserved, each with a comment on why. It serves 
 as material to reproduce the scenarios below.
 
 ## Scenarios verified on Moodle 3.0.5
+
+These were checked by hand on 3.0.5 only. On 3.8, the same rules are covered by the automated
+suite, which includes real backups and restores (see [Testing](#testing)).
 
 - [x] Restore as a new course (`TARGET_NEW_COURSE`)
 - [x] Restore merging into an existing course (`TARGET_EXISTING_ADDING`)
@@ -133,7 +184,8 @@ goes red.
 
 ### Measure your installation
 
-The plugin ships the tool that produced the numbers below:
+The plugin ships the tool that produced the numbers below. Run it from the Moodle root, as the
+web server user (`sudo -u www-data`, for instance):
 
     php local/resourcelinkfix/cli/measure_links.php --js
 
