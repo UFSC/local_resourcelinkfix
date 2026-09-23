@@ -22,6 +22,11 @@
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+namespace local_resourcelinkfix;
+
+use advanced_testcase;
+use local_resourcelinkfix_testable_plugin;
+
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
@@ -35,15 +40,16 @@ require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/testable_plu
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @group      local_resourcelinkfix
  */
-class local_resourcelinkfix_file_selection_testcase extends advanced_testcase {
-
+class file_selection_test extends advanced_testcase {
     /**
+     * Builds a plugin instance with the given .js setting.
+     *
      * @param bool $rewritejs
      * @return local_resourcelinkfix_testable_plugin
      */
     protected function plugin($rewritejs) {
         $plugin = new local_resourcelinkfix_testable_plugin();
-        $plugin->set_restore_state(array('rewritejs' => $rewritejs));
+        $plugin->set_restore_state(['rewritejs' => $rewritejs]);
         return $plugin;
     }
 
@@ -51,7 +57,7 @@ class local_resourcelinkfix_file_selection_testcase extends advanced_testcase {
      * HTML entra sempre, independente da configuracao de .js.
      */
     public function test_html_entra_sempre() {
-        foreach (array(false, true) as $rewritejs) {
+        foreach ([false, true] as $rewritejs) {
             $plugin = $this->plugin($rewritejs);
             $this->assertTrue($plugin->processes('index.html'));
             $this->assertTrue($plugin->processes('pagina.htm'));
@@ -73,7 +79,7 @@ class local_resourcelinkfix_file_selection_testcase extends advanced_testcase {
      */
     public function test_outras_extensoes_nunca_entram() {
         $plugin = $this->plugin(true);
-        foreach (array('style.css', 'material.pdf', 'dados.json', 'foto.png', 'leiame.txt') as $nome) {
+        foreach (['style.css', 'material.pdf', 'dados.json', 'foto.png', 'leiame.txt'] as $nome) {
             $this->assertFalse($plugin->processes($nome), $nome . ' nao deveria entrar');
         }
     }

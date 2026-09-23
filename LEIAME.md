@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=744efd8b888a3c61d484206daac919674616657baaedc42846d6ff826edc1085 -->
+<!-- sync: README.md sha256=08265678e5aee8cb8258b4d112a3241eb96f8e6a4a83aa1fda2a33bcea8c8caa -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -214,7 +214,7 @@ Moodle limpo:
 
 O moodle-plugin-ci não aceita Moodle anterior ao 3.2 (e a 4.x, anterior ao 3.8.3), por isso o
 job do 3.0 não usa a ferramenta. As normas verificadas no 3.8 valem para o 3.0: o código é o
-mesmo. Por ora, phpcs, PHPDoc e phpmd só avisam, sem falhar o job.
+mesmo. phpcs e PHPDoc são bloqueantes — qualquer apontamento falha o job; o phpmd só avisa.
 
 O `README.md`, em inglês, é a fonte; este arquivo é a tradução. Ao mudar o README, traduza a
 mudança aqui e atualize o hash da primeira linha (`sha256sum README.md`), senão o job `leiame`
@@ -259,10 +259,13 @@ identificadores em inglês, 4 espaços de indentação, linhas dentro de 132 col
 cabeçalho GPL mais docblock com `@package`/`@copyright`/`@license`, e `defined('MOODLE_INTERNAL')`.
 Os comentários e o `lang/pt_br` estão em português.
 
-A conformidade ainda não é completa. Em 23/09/2026 o phpcs do CI apontou **332 erros e 14
-avisos**, quase todos de formatação (sintaxe de array, quebra de chamadas longas, indentação);
-os métodos de teste têm nomes em português, o que o phpcs não detecta. Um PR de limpeza vai
-zerar o relatório e tornar o phpcs bloqueante.
+O phpcs (com moodle-cs) e o PHPDoc são **bloqueantes** no CI: qualquer erro ou aviso falha o
+job. Os comentários e os nomes dos métodos de teste ainda estão em português, o que o phpcs não
+detecta; um PR de tradução vem em seguida.
+
+Atender ao Moodle 3.0 (PHP 5.6) e ao moodle-cs ao mesmo tempo impede a desestruturação:
+`[$a, $b] = …` exige PHP 7.1, e o moodle-cs proíbe `list()`. Use acesso por índice
+(`$a = $par[0];`).
 
 ## Limitações
 

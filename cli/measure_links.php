@@ -31,10 +31,13 @@ require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
 require_once($CFG->dirroot .
     '/local/resourcelinkfix/backup/moodle2/restore_local_resourcelinkfix_plugin.class.php');
 
-list($options, $unrecognized) = cli_get_params(
-    array('help' => false, 'course' => 0, 'examples' => 5, 'js' => false),
-    array('h' => 'help', 'c' => 'course', 'e' => 'examples', 'j' => 'js')
+// No destructuring: PHP 5.6 (Moodle 3.0) lacks [...] =, and moodle-cs forbids list().
+$params = cli_get_params(
+    ['help' => false, 'course' => 0, 'examples' => 5, 'js' => false],
+    ['h' => 'help', 'c' => 'course', 'e' => 'examples', 'j' => 'js']
 );
+$options = $params[0];
+$unrecognized = $params[1];
 
 if ($unrecognized) {
     cli_error(get_string('cliunknowoption', 'admin', implode("\n  ", $unrecognized)));
@@ -81,7 +84,7 @@ $anylink = '~(?:https?://[a-z0-9.\-]+)?/?((?:mod/[a-z0-9_]+/[a-z0-9_]+|course/vi
 function local_resourcelinkfix_fetch_files($like, $courseid) {
     global $DB;
 
-    $params = array('like1' => $like);
+    $params = ['like1' => $like];
     $where = "f.component = 'mod_resource' AND f.filearea = 'content'
               AND f.filesize > 0 AND " . $DB->sql_like('f.filename', ':like1', false);
     $from = "{files} f";
@@ -91,8 +94,10 @@ function local_resourcelinkfix_fetch_files($like, $courseid) {
         $params['ctxmod'] = CONTEXT_MODULE;
         $params['courseid'] = $courseid;
     }
-    return $DB->get_records_sql("SELECT f.id, f.contenthash, f.filename FROM {$from} WHERE {$where}",
-        $params);
+    return $DB->get_records_sql(
+        "SELECT f.id, f.contenthash, f.filename FROM {$from} WHERE {$where}",
+        $params
+    );
 }
 
 /**
@@ -105,7 +110,7 @@ function local_resourcelinkfix_fetch_files($like, $courseid) {
  */
 function local_resourcelinkfix_read_contents($records, &$seen, &$missing) {
     $fs = get_file_storage();
-    $out = array();
+    $out = [];
     foreach ($records as $record) {
         if (isset($seen[$record->contenthash])) {
             continue;
@@ -140,24 +145,24 @@ function local_resourcelinkfix_line($label, $value, $total) {
 // Um controle de hashes por fase: HTML e .js sao contados separadamente.
 // Compartilhar o mesmo array faria um .js de conteudo identico ao de algum
 // .html ser pulado, subestimando a contagem de arquivos.
-$seenhtml = array();
-$seenjs = array();
+$seenhtml = [];
+$seenjs = [];
 $missing = 0;
 
 cli_heading('Recursos analisados' . ($courseid ? " (curso {$courseid})" : ' (site inteiro)'));
 
-// ----------------------------------------------------------------- HTML ---
+// HTML files.
 $htmlrecords = array_merge(
     local_resourcelinkfix_fetch_files('%.html', $courseid),
     local_resourcelinkfix_fetch_files('%.htm', $courseid)
 );
 $htmlfiles = local_resourcelinkfix_read_contents($htmlrecords, $seenhtml, $missing);
 
-$stats = array('total' => 0, 'covered' => 0, 'otherhost' => 0,
-    'idnotfirst' => 0, 'otherscript' => 0);
-$scripts = array();
-$hosts = array();
-$escaped = array();
+$stats = ['total' => 0, 'covered' => 0, 'otherhost' => 0,
+    'idnotfirst' => 0, 'otherscript' => 0];
+$scripts = [];
+$hosts = [];
+$escaped = [];
 $withlinks = 0;
 
 foreach ($htmlfiles as $content) {
@@ -174,13 +179,18 @@ foreach ($htmlfiles as $content) {
     // guloso na frente faz backtracking quadratico quando o arquivo tem uma
     // sequencia longa sem espaco (imagem em base64): 10,5 s para 30 KB,
     // contra 1,3 ms nesta forma.
-    if (!preg_match_all('~(?:(?:https?:)?//[^\s"\'<>()]{0,400})?(?<![a-z0-9_])'
+    if (
+        !preg_match_all(
+            '~(?:(?:https?:)?//[^\s"\'<>()]{0,400})?(?<![a-z0-9_])'
             . '(?:mod/[a-z0-9_]+/[a-z0-9_]+|course/view|user/view)\.php\?[^"\'\s>)]{0,400}~i',
-            $content, $found_urls)) {
+            $content,
+            $foundurls
+        )
+    ) {
         continue;
     }
     $found = false;
-    foreach ($found_urls[0] as $url) {
+    foreach ($foundurls[0] as $url) {
         if (!preg_match($anylink, $url, $parts)) {
             continue;
         }
@@ -204,7 +214,7 @@ foreach ($htmlfiles as $content) {
             } else {
                 $stats['otherhost']++;
                 if (!isset($escaped['host de outro site'])) {
-                    $escaped['host de outro site'] = array();
+                    $escaped['host de outro site'] = [];
                 }
                 if (count($escaped['host de outro site']) < $maxexamples) {
                     $escaped['host de outro site'][] = $url;
@@ -220,7 +230,7 @@ foreach ($htmlfiles as $content) {
             $key = 'script fora do padrao';
         }
         if (!isset($escaped[$key])) {
-            $escaped[$key] = array();
+            $escaped[$key] = [];
         }
         if (count($escaped[$key]) < $maxexamples) {
             $escaped[$key][] = $url;
@@ -266,7 +276,7 @@ foreach ($escaped as $key => $examples) {
     }
 }
 
-// ------------------------------------------------------------------- JS ---
+// JS files.
 if ($withjs) {
     echo "\n";
     cli_heading('Arquivos .js');
@@ -284,7 +294,7 @@ if ($withjs) {
     $jstotal = 0;
     $jsliteral = 0;
     $jsbuilt = 0;
-    $jssamples = array();
+    $jssamples = [];
 
     foreach ($jsfiles as $content) {
         $occurrences = preg_match_all($any, $content, $ignored);
@@ -295,9 +305,14 @@ if ($withjs) {
         $jstotal += $occurrences;
         $jsliteral += preg_match_all($literal, $content, $ignored);
         $jsbuilt += preg_match_all($built, $content, $ignored);
-        if (count($jssamples) < $maxexamples
-                && preg_match('~[^\s"\']*(?:mod/[a-z0-9_]+/(?:view|index|complete)|course/view)\.php\?id=\d+~i',
-                    $content, $sample)) {
+        if (
+            count($jssamples) < $maxexamples
+                && preg_match(
+                    '~[^\s"\']*(?:mod/[a-z0-9_]+/(?:view|index|complete)|course/view)\.php\?id=\d+~i',
+                    $content,
+                    $sample
+                )
+        ) {
             $jssamples[] = $sample[0];
         }
     }

@@ -24,8 +24,6 @@
 
 namespace local_resourcelinkfix\privacy;
 
-defined('MOODLE_INTERNAL') || die();
-
 // Só é carregado no Moodle 3.4+ (Privacy API). Inofensivo no 3.0.
 /**
  * Provider de privacidade: o plugin não armazena dado pessoal algum.
@@ -35,7 +33,6 @@ defined('MOODLE_INTERNAL') || die();
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class provider implements \core_privacy\local\metadata\null_provider {
-
     /**
      * Chave da string que explica por que não há dado pessoal.
      *

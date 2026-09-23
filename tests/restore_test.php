@@ -22,6 +22,15 @@
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+namespace local_resourcelinkfix;
+
+use advanced_testcase;
+use backup;
+use backup_controller;
+use context_module;
+use restore_controller;
+use restore_dbops;
+
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
@@ -40,8 +49,7 @@ require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @group      local_resourcelinkfix
  */
-class local_resourcelinkfix_restore_testcase extends advanced_testcase {
-
+class restore_test extends advanced_testcase {
     /**
      * Cria um curso com uma atividade e um recurso cujo HTML e cujo JS
      * apontam para ela.
@@ -52,23 +60,25 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
         global $USER;
 
         $generator = $this->getDataGenerator();
-        $course = $generator->create_course(array('numsections' => 2));
-        $page = $generator->create_module('page', array('course' => $course->id));
-        $resource = $generator->create_module('resource', array('course' => $course->id));
+        $course = $generator->create_course(['numsections' => 2]);
+        $page = $generator->create_module('page', ['course' => $course->id]);
+        $resource = $generator->create_module('resource', ['course' => $course->id]);
 
         $context = context_module::instance($resource->cmid);
         $fs = get_file_storage();
-        $base = array('contextid' => $context->id, 'component' => 'mod_resource',
-            'filearea' => 'content', 'itemid' => 0, 'filepath' => '/', 'userid' => $USER->id);
+        $base = ['contextid' => $context->id, 'component' => 'mod_resource',
+            'filearea' => 'content', 'itemid' => 0, 'filepath' => '/', 'userid' => $USER->id];
 
         $fs->create_file_from_string(
-            array_merge($base, array('filename' => 'index.html', 'sortorder' => 1)),
-            '<a href="../../mod/page/view.php?id=' . $page->cmid . '">Atividade</a>');
+            array_merge($base, ['filename' => 'index.html', 'sortorder' => 1]),
+            '<a href="../../mod/page/view.php?id=' . $page->cmid . '">Atividade</a>'
+        );
         $fs->create_file_from_string(
-            array_merge($base, array('filename' => 'nav.js', 'sortorder' => 0)),
-            "var u = '../../mod/page/view.php?id={$page->cmid}';");
+            array_merge($base, ['filename' => 'nav.js', 'sortorder' => 0]),
+            "var u = '../../mod/page/view.php?id={$page->cmid}';"
+        );
 
-        return array($course, $page->cmid, $resource->cmid);
+        return [$course, $page->cmid, $resource->cmid];
     }
 
     /**
@@ -80,8 +90,14 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
     protected function fazer_backup($courseid) {
         global $USER, $CFG;
 
-        $bc = new backup_controller(backup::TYPE_1COURSE, $courseid, backup::FORMAT_MOODLE,
-            backup::INTERACTIVE_NO, backup::MODE_GENERAL, $USER->id);
+        $bc = new backup_controller(
+            backup::TYPE_1COURSE,
+            $courseid,
+            backup::FORMAT_MOODLE,
+            backup::INTERACTIVE_NO,
+            backup::MODE_GENERAL,
+            $USER->id
+        );
         $bc->execute_plan();
         $results = $bc->get_results();
         $file = $results['backup_destination'];
@@ -95,6 +111,8 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
     }
 
     /**
+     * Restores an extracted backup into a course.
+     *
      * @param string $dir Diretorio do backup extraido.
      * @param int $destino Curso de destino.
      * @param int $target Constante backup::TARGET_*.
@@ -102,8 +120,14 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
     protected function restaurar($dir, $destino, $target) {
         global $USER;
 
-        $rc = new restore_controller($dir, $destino, backup::INTERACTIVE_NO,
-            backup::MODE_GENERAL, $USER->id, $target);
+        $rc = new restore_controller(
+            $dir,
+            $destino,
+            backup::INTERACTIVE_NO,
+            backup::MODE_GENERAL,
+            $USER->id,
+            $target
+        );
         $rc->execute_precheck();
         $rc->execute_plan();
         $rc->destroy();
@@ -119,13 +143,22 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
     protected function conteudo($courseid, $filename) {
         global $DB;
 
-        $cmid = $DB->get_field_sql("SELECT cm.id
+        $cmid = $DB->get_field_sql(
+            "SELECT cm.id
                                       FROM {course_modules} cm
                                       JOIN {modules} m ON m.id = cm.module
                                      WHERE cm.course = ? AND m.name = 'resource'",
-            array($courseid), IGNORE_MULTIPLE);
-        $file = get_file_storage()->get_file(context_module::instance($cmid)->id,
-            'mod_resource', 'content', 0, '/', $filename);
+            [$courseid],
+            IGNORE_MULTIPLE
+        );
+        $file = get_file_storage()->get_file(
+            context_module::instance($cmid)->id,
+            'mod_resource',
+            'content',
+            0,
+            '/',
+            $filename
+        );
         return $file ? $file->get_content() : '';
     }
 
@@ -138,11 +171,14 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
     protected function cmid_da_page($courseid) {
         global $DB;
 
-        return (int)$DB->get_field_sql("SELECT cm.id
+        return (int)$DB->get_field_sql(
+            "SELECT cm.id
                                           FROM {course_modules} cm
                                           JOIN {modules} m ON m.id = cm.module
                                          WHERE cm.course = ? AND m.name = 'page'",
-            array($courseid), IGNORE_MULTIPLE);
+            [$courseid],
+            IGNORE_MULTIPLE
+        );
     }
 
     /**
@@ -154,11 +190,20 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
         $this->resetAfterTest(true);
         $this->setAdminUser();
 
-        list($course, $cmidantigo, $rescmid) = $this->criar_curso_de_origem();
+        $origin = $this->criar_curso_de_origem();
+
+        $course = $origin[0];
+
+        $cmidantigo = $origin[1];
+
+        $rescmid = $origin[2];
         $dir = $this->fazer_backup($course->id);
 
-        $novoid = restore_dbops::create_new_course('Destino', 'destino-' . uniqid(),
-            $course->category);
+        $novoid = restore_dbops::create_new_course(
+            'Destino',
+            'destino-' . uniqid(),
+            $course->category
+        );
         $this->restaurar($dir, $novoid, backup::TARGET_NEW_COURSE);
 
         $cmidnovo = $this->cmid_da_page($novoid);
@@ -176,10 +221,16 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
         $this->resetAfterTest(true);
         $this->setAdminUser();
 
-        list($course, $cmidantigo, $rescmid) = $this->criar_curso_de_origem();
+        $origin = $this->criar_curso_de_origem();
+
+        $course = $origin[0];
+
+        $cmidantigo = $origin[1];
+
+        $rescmid = $origin[2];
         $dir = $this->fazer_backup($course->id);
 
-        $destino = $this->getDataGenerator()->create_course(array('numsections' => 2));
+        $destino = $this->getDataGenerator()->create_course(['numsections' => 2]);
         $this->restaurar($dir, $destino->id, backup::TARGET_EXISTING_ADDING);
 
         $cmidnovo = $this->cmid_da_page($destino->id);
@@ -195,11 +246,20 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
         $this->setAdminUser();
         set_config('rewritejs', 0, 'local_resourcelinkfix');
 
-        list($course, $cmidantigo, $rescmid) = $this->criar_curso_de_origem();
+        $origin = $this->criar_curso_de_origem();
+
+        $course = $origin[0];
+
+        $cmidantigo = $origin[1];
+
+        $rescmid = $origin[2];
         $dir = $this->fazer_backup($course->id);
 
-        $novoid = restore_dbops::create_new_course('Destino js off', 'djsoff-' . uniqid(),
-            $course->category);
+        $novoid = restore_dbops::create_new_course(
+            'Destino js off',
+            'djsoff-' . uniqid(),
+            $course->category
+        );
         $this->restaurar($dir, $novoid, backup::TARGET_NEW_COURSE);
 
         $cmidnovo = $this->cmid_da_page($novoid);
@@ -217,11 +277,20 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
         $this->setAdminUser();
         set_config('rewritejs', 1, 'local_resourcelinkfix');
 
-        list($course, $cmidantigo, $rescmid) = $this->criar_curso_de_origem();
+        $origin = $this->criar_curso_de_origem();
+
+        $course = $origin[0];
+
+        $cmidantigo = $origin[1];
+
+        $rescmid = $origin[2];
         $dir = $this->fazer_backup($course->id);
 
-        $novoid = restore_dbops::create_new_course('Destino js on', 'djson-' . uniqid(),
-            $course->category);
+        $novoid = restore_dbops::create_new_course(
+            'Destino js on',
+            'djson-' . uniqid(),
+            $course->category
+        );
         $this->restaurar($dir, $novoid, backup::TARGET_NEW_COURSE);
 
         $cmidnovo = $this->cmid_da_page($novoid);
@@ -238,11 +307,20 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
         $this->setAdminUser();
         set_config('enabled', 0, 'local_resourcelinkfix');
 
-        list($course, $cmidantigo, $rescmid) = $this->criar_curso_de_origem();
+        $origin = $this->criar_curso_de_origem();
+
+        $course = $origin[0];
+
+        $cmidantigo = $origin[1];
+
+        $rescmid = $origin[2];
         $dir = $this->fazer_backup($course->id);
 
-        $novoid = restore_dbops::create_new_course('Destino off', 'doff-' . uniqid(),
-            $course->category);
+        $novoid = restore_dbops::create_new_course(
+            'Destino off',
+            'doff-' . uniqid(),
+            $course->category
+        );
         $this->restaurar($dir, $novoid, backup::TARGET_NEW_COURSE);
 
         $this->assertContains('view.php?id=' . $cmidantigo, $this->conteudo($novoid, 'index.html'));
@@ -257,20 +335,38 @@ class local_resourcelinkfix_restore_testcase extends advanced_testcase {
         $this->resetAfterTest(true);
         $this->setAdminUser();
 
-        list($course, $cmidantigo, $rescmid) = $this->criar_curso_de_origem();
+        $origin = $this->criar_curso_de_origem();
+
+        $course = $origin[0];
+
+        $cmidantigo = $origin[1];
+
+        $rescmid = $origin[2];
         $dir = $this->fazer_backup($course->id);
 
-        $novoid = restore_dbops::create_new_course('Destino so', 'dso-' . uniqid(),
-            $course->category);
+        $novoid = restore_dbops::create_new_course(
+            'Destino so',
+            'dso-' . uniqid(),
+            $course->category
+        );
         $this->restaurar($dir, $novoid, backup::TARGET_NEW_COURSE);
 
-        $cmid = $DB->get_field_sql("SELECT cm.id
+        $cmid = $DB->get_field_sql(
+            "SELECT cm.id
                                       FROM {course_modules} cm
                                       JOIN {modules} m ON m.id = cm.module
                                      WHERE cm.course = ? AND m.name = 'resource'",
-            array($novoid), IGNORE_MULTIPLE);
-        $file = get_file_storage()->get_file(context_module::instance($cmid)->id,
-            'mod_resource', 'content', 0, '/', 'index.html');
+            [$novoid],
+            IGNORE_MULTIPLE
+        );
+        $file = get_file_storage()->get_file(
+            context_module::instance($cmid)->id,
+            'mod_resource',
+            'content',
+            0,
+            '/',
+            'index.html'
+        );
         $this->assertEquals(1, $file->get_sortorder());
     }
 }
