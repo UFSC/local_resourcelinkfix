@@ -708,17 +708,17 @@ final class rewrite_links_test extends advanced_testcase {
     }
 
     /**
-     * The prefix limit, at its boundaries.
+     * The length of the text glued before the path does not decide anything.
      *
-     * The prefix is read up to 300 characters. Past that, the start of the
-     * URL is out of sight, and a third site's '://' could fall out of the
-     * window: the URL was then read as relative and its id remapped. A
-     * prefix longer than the limit is now left alone, whatever it is.
+     * It was read up to 300 characters. Past that, the start of the URL was
+     * out of sight: a third site passed for a relative path, and a link late
+     * in minified CSS was not seen at all. The prefix is now read whole, back
+     * to the start of the run.
      */
-    public function test_prefix_limit_boundaries(): void {
+    public function test_prefix_length_does_not_matter(): void {
         // Source in a subfolder long enough to put the prefix at each length.
         // 'https://origem.example.org/' has 27 characters, plus the folder and its slash.
-        foreach ([299 => true, 300 => true, 301 => false] as $length => $fixed) {
+        foreach ([299, 300, 301, 5000] as $length) {
             $root = 'https://origem.example.org/' . str_repeat('a', $length - 28);
             $plugin = new local_resourcelinkfix_testable_plugin();
             $plugin->set_restore_state([
@@ -729,13 +729,16 @@ final class rewrite_links_test extends advanced_testcase {
             ]);
             $url = $root . '/mod/page/view.php?id=101';
             $this->assertSame($length, strlen($root . '/'), 'prefix length');
-            $expected = $fixed ? self::TARGET . '/mod/page/view.php?id=201' : $url;
-            $this->assertSame($expected, $plugin->rewrite($url), 'source, prefix of ' . $length);
+            $this->assertSame(
+                self::TARGET . '/mod/page/view.php?id=201',
+                $plugin->rewrite($url),
+                'source, prefix of ' . $length
+            );
         }
 
-        // Third site: preserved at every length, including past the limit.
+        // Third site: preserved at every length.
         $plugin = $this->plugin();
-        foreach ([299, 300, 301, 306, 307, 400] as $length) {
+        foreach ([299, 300, 301, 306, 307, 400, 5000] as $length) {
             $root = 'https://terceiro.example.com/' . str_repeat('x', $length - 30);
             $this->assertSame($length, strlen($root . '/'), 'prefix length');
             $url = $root . '/mod/page/view.php?id=101';
@@ -774,5 +777,175 @@ final class rewrite_links_test extends advanced_testcase {
             'url(//origem.example.org/mod/page/view.php?id=101)',
             'url(//destino.example.net/mod/page/view.php?id=201)'
         ));
+    }
+    /**
+     * A line break or tab inside an address does not turn it into a relative path.
+     *
+     * Browsers drop them from URLs, so the link still goes to the third site.
+     * The plugin sees the text before the break and leaves the link alone.
+     */
+    public function test_third_site_broken_by_line_break_is_preserved(): void {
+        $plugin = $this->plugin();
+        $cases = [
+            'newline before the path' => "<a href=\"https://terceiro.example.com/\nmod/page/view.php?id=101\">x</a>",
+            'newline in a subfolder'  => "<a href=\"https://terceiro.example.com/moo\ndle/mod/page/view.php?id=101\">x</a>",
+            'CRLF after the host'     => "<a href=\"https://terceiro.example.com/moodle/\r\nmod/page/view.php?id=101\">x</a>",
+            'tab in a subfolder'      => "<a href=\"https://terceiro.example.com/lms\t/mod/page/view.php?id=101\">x</a>",
+        ];
+        foreach ($cases as $name => $html) {
+            $this->assertSame($html, $plugin->rewrite($html), 'should preserve: ' . $name);
+        }
+    }
+
+    /**
+     * A split address whose last piece does not look like a domain is still preserved.
+     */
+    public function test_split_address_without_domain_piece_is_preserved(): void {
+        $plugin = $this->plugin();
+        $cases = [
+            'IPv4 after a space'      => 'https:// 10.0.0.5/mod/page/view.php?id=101',
+            'localhost after a space' => 'http:// localhost/mod/page/view.php?id=101',
+            'space after the dot'     => 'https://terceiro.example. com/mod/page/view.php?id=101',
+            'split top-level domain'  => 'https://terceiro.example.c om/mod/page/view.php?id=101',
+            'hyphenated subfolder'    => 'https://terceiro.example.com/moo- dle/mod/page/view.php?id=101',
+            'space in a subfolder'    => '<a href="https://terceiro.example.com/moodle 2/mod/page/view.php?id=101">x</a>',
+            'split port'              => 'https://terceiro.example.com: 8080/mod/page/view.php?id=101',
+            'split IP'                => 'https://10.0.0.- 5/mod/page/view.php?id=101',
+            'split twice'             => 'https:// ter- ceiro.example.com/moo dle/mod/page/view.php?id=101',
+        ];
+        foreach ($cases as $name => $url) {
+            $this->assertSame($url, $plugin->rewrite($url), 'should preserve: ' . $name);
+        }
+    }
+
+    /**
+     * The piece before a space only matters when it looks like part of an address.
+     *
+     * Running text, or a space after a closed attribute, still lets a relative
+     * link be fixed.
+     */
+    public function test_text_before_a_space_that_is_not_an_address(): void {
+        $plugin = $this->plugin();
+        $cases = [
+            'word'             => 'veja mod/page/view.php?id=101',
+            'closed attribute' => "<a title=\"x\"\nhref=../../mod/page/view.php?id=101>x</a>",
+            'after a quote'    => '<a href="https://terceiro.example.com/">t</a> "../mod/page/view.php?id=101"',
+        ];
+        foreach ($cases as $name => $content) {
+            $this->assertStringContainsString('view.php?id=201', $plugin->rewrite($content), 'should fix: ' . $name);
+        }
+    }
+
+    /**
+     * Every link in a run without spaces is read, however far into it.
+     */
+    public function test_every_link_in_a_run_is_fixed(): void {
+        $plugin = $this->plugin();
+        $this->assertSame(
+            '<a onclick="a(&quot;../mod/page/view.php?id=201&quot;);b(&quot;../mod/page/view.php?id=202&quot;)">x</a>',
+            $plugin->rewrite('<a onclick="a(&quot;../mod/page/view.php?id=101&quot;);'
+                . 'b(&quot;../mod/page/view.php?id=102&quot;)">x</a>')
+        );
+
+        $filler = str_repeat('.c{color:red}', 30);
+        $out = $plugin->rewrite('<style>.a{background:url(../mod/page/view.php?id=101)}' . $filler
+            . '.b{background:url(../mod/page/view.php?id=102)}</style>');
+        $this->assertStringContainsString('view.php?id=201', $out);
+        $this->assertStringContainsString('view.php?id=202', $out);
+
+        // A source URL after a relative link in the same run.
+        $this->assertSame(
+            'url(../mod/page/view.php?id=201),url(' . self::TARGET . '/mod/page/view.php?id=202)',
+            $plugin->rewrite('url(../mod/page/view.php?id=101),url(' . self::SOURCE . '/mod/page/view.php?id=102)')
+        );
+    }
+
+    /**
+     * An '@' only counts as credentials when a host follows it.
+     */
+    public function test_at_sign_counts_only_before_a_host(): void {
+        $plugin = $this->plugin();
+        $this->assertStringContainsString(
+            'view.php?id=201',
+            $plugin->rewrite('<style>@media(max-width:600px){.b{background:url(../mod/page/view.php?id=101)}}</style>')
+        );
+        foreach (['prof@terceiro.example.com/mod/page/view.php?id=101', 'u:s@10.0.0.5/mod/page/view.php?id=101'] as $url) {
+            $this->assertSame($url, $plugin->rewrite($url), 'should preserve: ' . $url);
+        }
+    }
+
+    /**
+     * The host is compared ignoring case; the path is not.
+     */
+    public function test_case_of_host_and_path(): void {
+        $plugin = new local_resourcelinkfix_testable_plugin();
+        $plugin->set_restore_state([
+            'cmmap' => [101 => 201],
+            'oldcourseid' => 42, 'newcourseid' => 77,
+            'oldwwwroot' => 'https://h.example.org/moodle',
+            'newwwwroot' => self::TARGET,
+        ]);
+        $this->assertSame(
+            self::TARGET . '/mod/page/view.php?id=201',
+            $plugin->rewrite('HTTPS://H.EXAMPLE.ORG/moodle/mod/page/view.php?id=101')
+        );
+        $url = 'https://h.example.org/MOODLE/mod/page/view.php?id=101';
+        $this->assertSame($url, $plugin->rewrite($url));
+    }
+
+    /**
+     * The guard accepts a new wwwroot that extends the old one.
+     */
+    public function test_guard_accepts_new_root_extending_the_old(): void {
+        $plugin = new local_resourcelinkfix_testable_plugin();
+        $plugin->set_restore_state([
+            'cmmap' => [101 => 201, 102 => 202],
+            'oldcourseid' => 42, 'newcourseid' => 77,
+            'oldwwwroot' => 'https://ead.example.org',
+            'newwwwroot' => 'https://ead.example.org/moodle',
+        ]);
+        $this->assertSame(
+            '<a href="https://ead.example.org/moodle/mod/page/view.php?id=201">A</a>'
+                . '<a href="../mod/page/view.php?id=202">B</a>',
+            $plugin->rewrite_file_for_test('<a href="https://ead.example.org/mod/page/view.php?id=101">A</a>'
+                . '<a href="../mod/page/view.php?id=102">B</a>')
+        );
+    }
+
+    /**
+     * The guard only accepts the wwwroot swap at the start of the link's URL.
+     */
+    public function test_guard_blocks_root_swap_inside_another_url(): void {
+        $plugin = $this->plugin();
+        $this->assertFalse($plugin->only_links_differ(
+            'x ' . self::THIRD . '/r.php?u=' . self::SOURCE . '/mod/page/view.php?id=101 y',
+            'x ' . self::THIRD . '/r.php?u=' . self::TARGET . '/mod/page/view.php?id=201 y'
+        ));
+    }
+
+    /**
+     * What the measuring tool counts as reached is what the plugin rewrites.
+     */
+    public function test_reader_agrees_with_rewrite(): void {
+        $reader = new \local_resourcelinkfix\link_reader(self::SOURCE);
+        $contents = [
+            '<style>' . str_repeat('.c{color:red}', 30) . '.b{background:url(../mod/page/view.php?id=101)}</style>',
+            '<a href="' . self::SOURCE . '/mod/page/view.php?id=101">a</a> '
+                . '<a href="//origem.example.org/mod/page/view.php?id=102">b</a>',
+            "<a href=\"https://terceiro.example.com/\nmod/page/view.php?id=101\">x</a>",
+            'url(http://cdn.example.com/a.png),url(' . self::SOURCE . '/mod/page/view.php?id=101)',
+        ];
+        foreach ($contents as $content) {
+            $reached = 0;
+            foreach ($reader->find($content) as $link) {
+                if ($link['source'] !== false) {
+                    $reached++;
+                }
+            }
+            // A fresh plugin: the count adds up across calls.
+            $plugin = $this->plugin();
+            $plugin->rewrite($content);
+            $this->assertSame($plugin->get_linkcount(), $reached, 'content: ' . substr($content, -80));
+        }
     }
 }

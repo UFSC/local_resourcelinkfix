@@ -83,11 +83,13 @@ final class pcre_limits_test extends advanced_testcase {
      * With PCRE really aborting, the rewrite returns null.
      *
      * This test pins the threshold: the value used must make PCRE abort,
-     * or the next test passes by mistake. Measured in this environment: with
-     * backtrack_limit=100 the pattern still completes; from 30 down it aborts.
+     * or the next test passes by mistake. The pattern only matches the path
+     * and the id, and backtracks very little: measured on PHP 5.6, 7.2 and
+     * 8.3, with and without the JIT, it completes with backtrack_limit=2 and
+     * aborts with 1.
      */
     public function test_chosen_limit_really_aborts_pcre(): void {
-        ini_set('pcre.backtrack_limit', '10');
+        ini_set('pcre.backtrack_limit', '1');
 
         $plugin = $this->plugin();
         $result = $plugin->rewrite($this->heavy_content());
@@ -104,13 +106,12 @@ final class pcre_limits_test extends advanced_testcase {
      */
     public function test_rewrite_file_refuses_when_pcre_aborts(): void {
         $this->resetAfterTest(true);
-        ini_set('pcre.backtrack_limit', '10');
 
         $plugin = $this->plugin();
         // Neither setExpectedException() (removed in PHPUnit 6) nor expectException() (only from 5.2):
         // try/catch runs from Moodle 3.0 (PHPUnit 4.8) to 3.8 (PHPUnit 7.5).
         try {
-            $plugin->rewrite_file_for_test($this->heavy_content());
+            $plugin->rewrite_file_for_test($this->heavy_content(), '1');
             $this->fail('rewrite_file() wrote with PCRE aborted; it should throw moodle_exception');
         } catch (moodle_exception $e) {
             $this->assertInstanceOf('moodle_exception', $e);
@@ -121,7 +122,7 @@ final class pcre_limits_test extends advanced_testcase {
      * With PCRE aborted, the guard says no: without a mask there is no check.
      */
     public function test_guard_says_no_when_it_cannot_check(): void {
-        ini_set('pcre.backtrack_limit', '10');
+        ini_set('pcre.backtrack_limit', '1');
 
         $plugin = $this->plugin();
         $heavy = $this->heavy_content();
@@ -192,6 +193,22 @@ final class pcre_limits_test extends advanced_testcase {
             $elapsed,
             'the rewrite took ' . round($elapsed, 2) . ' s for 4 MB: a sign of backtracking'
         );
+    }
+
+    /**
+     * A link at the end of a megabyte run is read, and quickly.
+     */
+    public function test_link_at_the_end_of_a_megabyte_run(): void {
+        $plugin = $this->plugin();
+        $content = '<style>.x{background:url(data:image/png;base64,' . str_repeat('QUJD', 1024 * 1024)
+            . '),url(../mod/page/view.php?id=101)}</style>';
+
+        $start = microtime(true);
+        $result = $plugin->rewrite($content);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertStringContainsString('view.php?id=201', substr($result, -60));
+        $this->assertLessThan(0.5, $elapsed, 'the rewrite took ' . round($elapsed, 2) . ' s');
     }
 
     /**
