@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=53a4dce6384627828a37e9ca7779d74c3379dac2ad97874e2b66579a240eb5c4 -->
+<!-- sync: README.md sha256=afac4950df8d9dcee5b054fc05a46cfea1241bf44a092e1e4fecbe9c58179836 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -61,11 +61,14 @@ diferenciar maiúsculas, o caminho não.
 O texto colado antes do caminho é lido de volta até o início do trecho (um
 espaço, uma aspa, um sinal de maior ou menor) ou até o link anterior, qualquer
 que seja o tamanho: todo link de um CSS minificado ou de um `onclick` é lido.
-Quando esse texto vem depois de um espaço, de uma quebra de linha ou de uma
-tabulação, o pedaço logo antes deles também é conferido: o navegador descarta
-quebras de linha e tabulações da URL, e o PDF parte endereços com espaços. Se
-esse pedaço parece parte de um endereço (`//`, um ponto seguido de letras, ou
-`/`, `:`, `.` ou `-` no fim), o link fica como está.
+Quebras de linha e tabulações não encerram o trecho: o navegador as descarta da
+URL, então um endereço partido por elas continua sendo um endereço só. O
+navegador também lê `https:/host` e barras invertidas como `https://host`, e o
+plugin também. Quando o texto vem depois de um espaço, o pedaço logo antes do
+espaço também é conferido, porque o PDF parte endereços com espaços: se ele
+parece parte de um endereço (`//`, `http:` ou `https:` sozinhos, um domínio
+como `.org/`, ou `/`, `.` ou `-` no fim), o link fica como está. `background:`
+ou `Atividade:` antes do espaço não contam.
 
 Isso vale inclusive para formas que o plugin não sabe ler: IPv6
 (`https://[2001:db8::1]/...`), domínio com underscore, caminho longo, barra
@@ -345,6 +348,10 @@ Atender ao Moodle 3.0 (PHP 5.6) e ao moodle-cs ao mesmo tempo impede a desestrut
   que o plugin trata normalmente. Olhar mais para trás faria o plugin deixar de
   corrigir links relativos precedidos de texto corrido com um endereço, que são
   mais comuns.
+- **Link relativo no mesmo trecho de uma URL absoluta anterior** fica como
+  está: CSS minificado com `url(http://cdn/...)` antes de `url(../mod/...)`, ou
+  o mesmo em linhas seguidas, já que quebra de linha não encerra o trecho. O
+  plugin não tem como saber se o caminho pertence àquela URL.
 - **A trava protege o conteúdo, não a escolha dos links.** Ela recusa o
   arquivo em que algo fora dos links mudou; não julga quais links deveriam ter
   sido reescritos.

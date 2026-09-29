@@ -212,6 +212,34 @@ final class pcre_limits_test extends advanced_testcase {
     }
 
     /**
+     * Memory does not grow with the number of links.
+     *
+     * Collecting every match with its offsets, plus an array per link, took
+     * over 50 MB for 100,000 links in 4 MB of HTML; running out of memory is a
+     * fatal error that no catch stops, and it brings the whole restore down.
+     * Links are now read one at a time. The check runs in a separate process
+     * with a low memory_limit: within PHPUnit the peak already carries the
+     * previous tests, and it cannot be reset before PHP 8.2.
+     */
+    public function test_memory_does_not_grow_with_the_number_of_links(): void {
+        global $CFG;
+
+        $code = 'define("MOODLE_INTERNAL", 1);'
+            . 'require ' . var_export($CFG->dirroot . '/local/resourcelinkfix/classes/link_reader.php', true) . ';'
+            . '$c = str_repeat(\'<a href="../mod/page/view.php?id=101">x</a>\', 100000);'
+            . '$r = new local_resourcelinkfix\link_reader("https://origem.example.org");'
+            . '$n = 0;'
+            . '$ok = $r->each_link($c, function ($link) use (&$n) { $n++; });'
+            . 'echo $ok ? $n : "abort";';
+        $output = [];
+        $status = null;
+        exec(escapeshellarg(PHP_BINARY) . ' -d memory_limit=48M -r ' . escapeshellarg($code) . ' 2>&1', $output, $status);
+
+        $this->assertSame(0, $status, implode("\n", $output));
+        $this->assertSame('100000', trim(implode('', $output)));
+    }
+
+    /**
      * Long content with many words after an http:// must neither bring the
      * process down nor hit a limit.
      */

@@ -57,10 +57,12 @@ is not.
 
 The text glued before the path is read back to the start of the run (a space, a quote, an angle
 bracket) or to the previous link, whatever its length: every link in minified CSS or in an
-`onclick` is read. When that text follows a space, a line break or a tab, the piece right
-before them is checked too: browsers drop line breaks and tabs from a URL, and PDFs split
-addresses with spaces. If that piece looks like part of an address (`//`, a dot followed by
-letters, or a trailing `/`, `:`, `.` or `-`), the link stays as it is.
+`onclick` is read. Line breaks and tabs do not end the run: browsers drop them from a URL, so an
+address split by them is still one address. Browsers also read `https:/host` and backslashes as
+`https://host`, and so does the plugin. When the text follows a space, the piece right before
+the space is checked too, because PDFs split addresses with spaces: if it looks like part of an
+address (`//`, a bare `http:` or `https:`, a domain such as `.org/`, or a trailing `/`, `.` or
+`-`), the link stays as it is. `background:` or `Activity:` before a space do not count.
 
 This holds even for forms the plugin cannot read: IPv6 (`https://[2001:db8::1]/...`), a domain
 with an underscore, a long path, a double slash, a non-HTTP scheme. Failing to recognise an
@@ -333,6 +335,9 @@ needs PHP 7.1, and moodle-cs forbids `list()`. Use index access (`$a = $pair[0];
   space is malformed — the correct form is `%20`, which the plugin handles normally. Looking
   further back would stop the plugin from fixing relative links preceded by running text that
   holds an address, which are more common.
+- **A relative link in the same run as an absolute URL before it** is left alone: minified CSS
+  with `url(http://cdn/...)` before `url(../mod/...)`, or the same on consecutive lines, since
+  line breaks do not end a run. The plugin cannot tell whether the path belongs to that URL.
 - **The guard protects the content, not the choice of links.** It refuses a file where anything
   outside the links changed; it does not judge which links should have been rewritten.
 - **Relative** links to an activity not in the backup keep pointing to this site with a foreign

@@ -175,7 +175,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * HTML always. .js files only when the setting is on: .js is code, and a
      * mistake there breaks the resource's whole navigation, not one link.
      *
-     * @param string $filename
+     * @param string $filename Name of a file in the content area.
      * @return bool
      */
     protected function should_process_file($filename) {
@@ -239,13 +239,14 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * a pattern that matches more than it should overwrites teaching material
      * without a trace, and the original is already gone.
      *
-     * @param string $old
-     * @param string $new
+     * @param string $old Content before the rewrite.
+     * @param string $new Content after the rewrite.
      * @return bool False also when the check could not be made.
      */
     protected function only_links_changed($old, $new) {
-        $maskedold = $this->mask_links($old);
-        $maskednew = $this->mask_links($new);
+        $rootpattern = $this->root_pattern();
+        $maskedold = $this->mask_links($old, $rootpattern);
+        $maskednew = $this->mask_links($new, $rootpattern);
 
         // Without a reliable mask there is no check: say no, to be safe.
         if ($maskedold === null || $maskednew === null) {
@@ -255,24 +256,11 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * The content with each link's path and id replaced by a marker.
+     * The pattern of the source's or this site's wwwroot at the end of a prefix.
      *
-     * The prefix stays, so text lost there is seen. When it holds a single
-     * URL ending in the source's or this site's wwwroot, that wwwroot becomes
-     * one token: the rewrite may swap one for the other there, and nothing else.
-     *
-     * The guard protects the content, not the choice of links: an id changed
-     * in a link the plugin should have left alone is not its business.
-     *
-     * @param string $content
-     * @return string|null Null when PCRE aborts.
+     * @return string|null Null when neither is known.
      */
-    protected function mask_links($content) {
-        $links = $this->reader()->find($content);
-        if ($links === null) {
-            return null;
-        }
-
+    protected function root_pattern() {
         $roots = [];
         foreach ([$this->oldwwwroot, $this->newwwwroot] as $root) {
             $root = \local_resourcelinkfix\link_reader::strip_scheme(rtrim($root, '/'));
@@ -287,19 +275,35 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         $quoted = array_map(function ($root) {
             return preg_quote($root, '~');
         }, $roots);
-        $rootpattern = $quoted ? '~(?:https?:)?//(?:' . implode('|', $quoted) . ')/$~i' : null;
+        return $quoted ? '~(?:https?:)?//(?:' . implode('|', $quoted) . ')/$~i' : null;
+    }
 
+    /**
+     * The content with each link's path and id replaced by a marker.
+     *
+     * The prefix stays, so text lost there is seen. When it holds a single
+     * URL ending in the source's or this site's wwwroot, that wwwroot becomes
+     * one token: the rewrite may swap one for the other there, and nothing else.
+     *
+     * The guard protects the content, not the choice of links: an id changed
+     * in a link the plugin should have left alone is not its business.
+     *
+     * @param string $content The content to mask.
+     * @param string|null $rootpattern From root_pattern().
+     * @return string|null Null when PCRE aborts.
+     */
+    protected function mask_links($content, $rootpattern) {
         $masked = '';
         $pos = 0;
-        foreach ($links as $link) {
+        $ok = $this->reader()->each_link($content, function ($link) use ($content, $rootpattern, &$masked, &$pos) {
             $prefix = $link['prefix'];
             if ($rootpattern !== null && substr_count($prefix, '//') === 1) {
                 $prefix = preg_replace($rootpattern, "\x00RLFROOT\x00", $prefix);
             }
             $masked .= substr($content, $pos, $link['start'] - $pos) . $prefix . "\x00RLFLINK\x00";
             $pos = $link['end'];
-        }
-        return $masked . substr($content, $pos);
+        });
+        return $ok ? $masked . substr($content, $pos) : null;
     }
 
     /**
@@ -309,8 +313,8 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * sliced and labelled. The goal is to allow rebuilding what would have
      * been lost, not to produce a readable diff.
      *
-     * @param string $label
-     * @param string $content
+     * @param string $label Label for each line, such as BEFORE or AFTER.
+     * @param string $content Content to log.
      */
     protected function log_content($label, $content) {
         // Deliberate cap. At LOG_ERROR the restore logger chain goes through
@@ -463,22 +467,18 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * course/view.php?id=COURSE become the new course. Absolute or relative
      * links. Unmapped ids stay untouched.
      *
-     * @param string $content
+     * @param string $content Content of a file.
      * @return string|null Null when PCRE aborts.
      */
     protected function rewrite_links($content) {
-        $links = $this->reader()->find($content);
-        if ($links === null) {
-            return null;
-        }
         $output = '';
         $pos = 0;
-        foreach ($links as $link) {
+        $ok = $this->reader()->each_link($content, function ($link) use ($content, &$output, &$pos) {
             $original = substr($content, $link['start'], $link['end'] - $link['start']);
             $output .= substr($content, $pos, $link['start'] - $pos) . $this->rewrite_link($link, $original);
             $pos = $link['end'];
-        }
-        return $output . substr($content, $pos);
+        });
+        return $ok ? $output . substr($content, $pos) : null;
     }
 
     /**
@@ -496,7 +496,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * open another activity. Keeping the old host, the link stays valid on the
      * source site.
      *
-     * @param array $link A link from \local_resourcelinkfix\link_reader::find().
+     * @param array $link A link, as \local_resourcelinkfix\link_reader::each_link() describes it.
      * @param string $original The link as it is in the content, prefix included.
      * @return string
      */

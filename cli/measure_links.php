@@ -88,7 +88,7 @@ function local_resourcelinkfix_fetch_files($like, $courseid) {
 /**
  * Reads the contents, skipping what is repeated or missing from the filedir.
  *
- * @param array $records
+ * @param array $records File records from local_resourcelinkfix_fetch_files().
  * @param array $seen Hashes already seen, by reference.
  * @param int $missing Count of missing files, by reference.
  * @return array contenthash => content
@@ -118,9 +118,9 @@ function local_resourcelinkfix_read_contents($records, &$seen, &$missing) {
 /**
  * Prints a count line with a percentage.
  *
- * @param string $label
- * @param int $value
- * @param int $total
+ * @param string $label Line label.
+ * @param int $value Count.
+ * @param int $total Total for the percentage; zero for none.
  */
 function local_resourcelinkfix_line($label, $value, $total) {
     $pct = $total > 0 ? sprintf('  (%5.1f%%)', 100 * $value / $total) : '';
@@ -160,13 +160,16 @@ foreach ($htmlfiles as $content) {
     // Links the plugin recognises, read exactly as the plugin reads them. The
     // plugin rewrites the whole file, not just attributes: a link in an inline
     // script, in onclick, in a CSS url() or in running text counts the same.
-    $links = $reader->find($content);
-    foreach ((array)$links as $link) {
+    $reader->each_link($content, function ($link) use (&$found, &$scripts, &$hosts, &$stats, &$escaped, $maxexamples) {
         $found = true;
         $script = strtolower($link['path']) . '.php';
         $scripts[$script] = isset($scripts[$script]) ? $scripts[$script] + 1 : 1;
-        $host = preg_match('~(?:https?:)?//[^/]+~i', $link['prefix'], $h)
-            ? strtolower($h[0]) : get_string('cli_relative', 'local_resourcelinkfix');
+        $host = \local_resourcelinkfix\link_reader::host_of($link);
+        if ($host === null) {
+            $host = get_string('cli_relative', 'local_resourcelinkfix');
+        } else if ($host === false) {
+            $host = get_string('cli_otherhost', 'local_resourcelinkfix');
+        }
         $hosts[$host] = isset($hosts[$host]) ? $hosts[$host] + 1 : 1;
 
         // An absolute link to another site, or an address the plugin cannot
@@ -174,16 +177,16 @@ foreach ($htmlfiles as $content) {
         // inflate the percentage with what will never be rewritten.
         if ($link['source'] !== false) {
             $stats['covered']++;
-            continue;
+            return;
         }
         $stats['otherhost']++;
         if (!isset($escaped['otherhost'])) {
             $escaped['otherhost'] = [];
         }
         if (count($escaped['otherhost']) < $maxexamples) {
-            $escaped['otherhost'][] = $link['prefix'] . $link['pathid'] . $link['id'];
+            $escaped['otherhost'][] = \local_resourcelinkfix\link_reader::excerpt($link);
         }
-    }
+    });
 
     // Other links to Moodle scripts, which the plugin does not reach: the id is
     // not the first parameter, or the script is outside its pattern.
@@ -202,7 +205,16 @@ foreach ($htmlfiles as $content) {
         continue;
     }
     foreach ($foundurls[0] as $url) {
-        if (preg_match($pattern, $url) || !preg_match($anylink, $url, $parts)) {
+        if (!preg_match($anylink, $url, $parts)) {
+            continue;
+        }
+        // Already counted above when it is itself a link the plugin recognises.
+        // A link carried in the query of another ('discuss.php?return=mod/...')
+        // does not make the outer one counted.
+        if (
+            preg_match($pattern, $parts[1] . '?' . $parts[2], $own, PREG_OFFSET_CAPTURE)
+                && $own[0][1] === 0
+        ) {
             continue;
         }
         $found = true;
