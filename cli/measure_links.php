@@ -158,9 +158,10 @@ $aborted = 0;
 foreach ($htmlfiles as $content) {
     $found = false;
 
-    // Links the plugin recognises, read exactly as the plugin reads them. The
-    // plugin rewrites the whole file, not just attributes: a link in an inline
-    // script, in onclick, in a CSS url() or in running text counts the same.
+    // Links the plugin recognises, read exactly as the plugin reads them: the
+    // whole file, not just attributes. A relative link outside a link value -
+    // onclick, inline script, running text - is counted as left alone, as the
+    // plugin leaves it (see DESIGN.md).
     // Counted on copies: if PCRE aborts halfway, the plugin skips the whole
     // file, and so does the count.
     $filestats = $stats;

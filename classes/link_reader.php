@@ -25,7 +25,7 @@
 namespace local_resourcelinkfix;
 
 /**
- * Finds links and reads the text glued before each one.
+ * Finds links and decides which are safe to rewrite.
  *
  * Shared by the restore plugin and the measuring tool, so that what the tool
  * reports as reached is exactly what the plugin rewrites.
@@ -33,22 +33,33 @@ namespace local_resourcelinkfix;
  * Two steps. A pattern finds the path and the id - 'mod/page/view.php?id=N' -
  * which is fast and linear. Then the code reads back from the path to the
  * start of the run of text without spaces, quotes or angle brackets (or to the
- * end of the previous link): that is the prefix, and it decides whether the
- * link is relative, from the source site, or to be left alone.
+ * end of the previous link): that is the prefix.
  *
- * Line breaks and tabs do not end a run: browsers drop them from a URL, so an
- * address split by them is still one address.
+ * - An absolute link (the prefix holds '//') is rewritten only when its base
+ *   is exactly the source's wwwroot.
+ * - A relative link is rewritten only where a link value starts: right after
+ *   'href=', 'src=' or a CSS 'url(' - and, in a .js file, a string literal
+ *   that starts a value. Anywhere else it is left alone.
+ *
+ * DO NOT go back to reading the text before a relative path to guess whether
+ * it is an address. That was tried through five review rounds, and each one
+ * found another form a browser reads as another site: hyphenation, line
+ * breaks, entities, escapes, a quote inside the value, JS concatenation,
+ * <base href>. DESIGN.md records the decision and how to extend it safely.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class link_reader {
+    /** Reading an HTML file. */
+    const MODE_HTML = 'html';
+
+    /** Reading a .js file. */
+    const MODE_JS = 'js';
+
     /** Characters that end a run: spaces, quotes and angle brackets. */
     const DELIMITERS = " \f\v\"'<>";
-
-    /** Spaces: they end a run, and text pasted from a PDF splits addresses with them. */
-    const SPACES = " \f\v";
 
     /** Characters browsers drop from inside a URL. */
     const DROPPED = "\t\n\r";
@@ -59,13 +70,21 @@ class link_reader {
     /** @var string Source wwwroot without its scheme ('site/moodle'); empty when unknown. */
     protected $source;
 
+    /** @var string MODE_HTML or MODE_JS. */
+    protected $mode;
+
+    /** @var bool Whether the content being read declares a <base href>. */
+    protected $hasbase = false;
+
     /**
      * Constructor.
      *
      * @param string $sourcewwwroot Wwwroot of the site where the backup was made; empty when unknown.
+     * @param string $mode MODE_HTML or MODE_JS.
      */
-    public function __construct($sourcewwwroot) {
+    public function __construct($sourcewwwroot, $mode = self::MODE_HTML) {
         $this->source = self::strip_scheme(rtrim($sourcewwwroot, '/'));
+        $this->mode = $mode;
     }
 
     /**
@@ -106,6 +125,8 @@ class link_reader {
      * @return bool False when PCRE aborts.
      */
     public function each_link($content, $visit) {
+        // With a <base href>, relative links resolve against another address.
+        $this->hasbase = $this->mode === self::MODE_HTML && preg_match('~<base\b[^>]*\bhref~i', $content);
         $pattern = self::get_pattern();
         $offset = 0;
         while (true) {
@@ -117,8 +138,7 @@ class link_reader {
                 return true;
             }
             $pathstart = $m[0][1];
-            $reversed = strrev((string)substr($content, $offset, $pathstart - $offset));
-            $prefixlength = strcspn($reversed, self::DELIMITERS);
+            $prefixlength = strcspn(strrev((string)substr($content, $offset, $pathstart - $offset)), self::DELIMITERS);
             $start = $pathstart - $prefixlength;
             $end = $pathstart + strlen($m[0][0]);
             $prefix = (string)substr($content, $start, $prefixlength);
@@ -130,7 +150,7 @@ class link_reader {
                 'path' => $m[2][0],
                 'script' => $m[3][0],
                 'id' => (int)$m[4][0],
-                'source' => $this->read_prefix($prefix, $this->token_before($reversed, $prefixlength)),
+                'source' => $this->read_prefix($prefix, $this->opens_value($content, $start)),
             ]);
             $offset = $end;
         }
@@ -151,34 +171,35 @@ class link_reader {
     }
 
     /**
-     * The run glued before the spaces that precede a prefix.
+     * Does a link value start where the run starts?
      *
-     * Text pasted from a PDF splits addresses with spaces. When the prefix
-     * follows a space, the piece right before it may be the start of the same
-     * address.
+     * True at the start of the text, and right after the quote (or spaces)
+     * that open the value of 'href=', 'src=' or a CSS 'url('. In a .js file,
+     * also right after a quote that opens a string starting a value: after
+     * '=', '(', ',', ':' or '['. Never after '+': that string continues
+     * another one.
      *
-     * @param string $reversed Text between the previous link (or the start) and the path, reversed.
-     * @param int $prefixlength Length of the prefix at the start of $reversed.
-     * @return string Empty when the prefix does not follow a space.
+     * @param string $content The content being read.
+     * @param int $start Offset where the run starts.
+     * @return bool
      */
-    protected function token_before($reversed, $prefixlength) {
-        if ($prefixlength >= strlen($reversed) || strpos(self::SPACES, $reversed[$prefixlength]) === false) {
-            return '';
+    protected function opens_value($content, $start) {
+        if ($start === 0) {
+            return true;
         }
-        // Spaces and line breaks together: a line may end in a space and the
-        // next start with an indent.
-        $tokenstart = $prefixlength + strspn($reversed, self::SPACES . self::DROPPED, $prefixlength);
-        $tokenlength = strcspn($reversed, self::DELIMITERS, $tokenstart);
-        return strrev((string)substr($reversed, $tokenstart, $tokenlength));
+        $window = substr($content, max(0, $start - 80), min(80, $start));
+        $opener = '(?:\b(?:href|src)\s*=|url\()(?:\s*["\']|\s+)';
+        if ($this->mode === self::MODE_JS) {
+            $opener .= '|[=(,:\[]\s*["\']';
+        }
+        return (bool)preg_match('~(?:' . $opener . ')$~i', $window);
     }
 
     /**
      * Text as a browser reads it inside a URL.
      *
      * HTML entities decoded ('&#47;', '&sol;', '&Tab;'), then line breaks and
-     * tabs dropped - the order a browser follows. The prefix and the piece
-     * before a space go through the same function, so they cannot disagree on
-     * what an address is.
+     * tabs dropped - the order a browser follows.
      *
      * Backslashes stay: a backslash may be a path separator or an escape
      * ('\x2f' in JS, '\00002f' in CSS), and any prefix holding one is left
@@ -204,11 +225,10 @@ class link_reader {
      * - more than one '//': two URLs glued together, or one URL carried in
      *   another's parameter, and there is no telling which the path belongs to;
      * - a scheme other than http or https, or credentials;
-     * - a relative prefix that is not a plain path after a plain lead (see
-     *   is_plain_lead()), a segment that looks like a domain, or a space right
-     *   after a piece that looks like part of an address: a URL whose start is
-     *   out of the prefix, or an encoded or escaped one;
-     * - an absolute URL whose base is not exactly the source's wwwroot.
+     * - a relative path that is not where a link value starts, or is not a
+     *   plain path (see read_relative_prefix());
+     * - an absolute URL whose base is not exactly the source's wwwroot, or
+     *   whose lead is not plain.
      *
      * The prefix is read the way a browser reads it (see normalize()). A
      * prefix that changes when normalised is only trusted as a relative path:
@@ -216,16 +236,16 @@ class link_reader {
      * was normalised.
      *
      * @param string $prefix The text glued before the path.
-     * @param string $token The piece before the spaces that precede the prefix, if any.
+     * @param bool $opener Whether a link value starts where the prefix starts.
      * @return array|false|null Null for a relative path; false to leave the
      *                          link alone; for the source site, [lead, whether
      *                          the URL has a scheme].
      */
-    public function read_prefix($prefix, $token = '') {
+    public function read_prefix($prefix, $opener = true) {
         $clean = self::normalize($prefix);
         $marks = substr_count($clean, '//');
         if ($marks === 0) {
-            return $this->read_relative_prefix($clean, $token);
+            return $this->read_relative_prefix($clean, $opener);
         }
         if ($marks > 1 || $clean !== $prefix) {
             return false;
@@ -236,24 +256,27 @@ class link_reader {
     /**
      * Reads a prefix without an authority mark.
      *
+     * Relative only when it is a plain path - the longest tail of path
+     * characters - and a link value starts right before that path: either the
+     * run starts at a value opener and the path is the whole prefix, or the
+     * prefix itself opens the value ('href=', '...url(').
+     *
      * @param string $prefix The prefix, normalised.
-     * @param string $token The piece before the spaces that precede the prefix, if any.
-     * @return false|null Null for a relative path; false when it may be part
-     *                    of an address whose start is out of sight.
+     * @param bool $opener Whether a link value starts where the prefix starts.
+     * @return false|null Null for a relative path; false to leave the link alone.
      */
-    protected function read_relative_prefix($prefix, $token) {
-        if ($this->looks_like_address_piece($token) || strpos($prefix, '\\') !== false) {
+    protected function read_relative_prefix($prefix, $opener) {
+        if ($this->hasbase || strpos($prefix, '\\') !== false) {
             return false;
         }
-        // Only a plain path after a plain lead is relative. The path is the
-        // longest tail of path characters; everything before it is the lead.
         $pathlength = strspn(strrev($prefix), self::PATHCHARS);
         $lead = (string)substr($prefix, 0, strlen($prefix) - $pathlength);
-        if (!$this->is_plain_lead($lead) || substr($lead, -1) === '@') {
+        if ($lead === '' ? !$opener : !$this->lead_opens_value($lead)) {
             return false;
         }
-        foreach (explode('/', (string)substr($prefix, -$pathlength)) as $segment) {
-            if ($pathlength && preg_match('~\.[a-z]{2,}(?::\d+)?$~i', $segment)) {
+        $path = (string)substr($prefix, strlen($prefix) - $pathlength);
+        foreach (explode('/', $path) as $segment) {
+            if (preg_match('~\.[a-z]{2,}(?::\d+)?$~i', $segment)) {
                 return false;
             }
         }
@@ -261,7 +284,17 @@ class link_reader {
     }
 
     /**
-     * Is the text before a path or a URL plain - 'url(', 'href=', 'go("'?
+     * Does the lead inside the run open a link value - 'href=', '...url('?
+     *
+     * @param string $lead The text before the path, normalised.
+     * @return bool
+     */
+    protected function lead_opens_value($lead) {
+        return $this->is_plain_lead($lead) && preg_match('~\b(?:href|src)=$|url\($~i', $lead);
+    }
+
+    /**
+     * Is the text before a path or a URL plain?
      *
      * A slash, a scheme, a numeric character reference or a backslash there
      * means the path or URL may continue something else: a folder, another
@@ -275,27 +308,6 @@ class link_reader {
             && strpos($lead, '\\') === false
             && strpos($lead, '&#') === false
             && !preg_match('~https?:~i', $lead);
-    }
-
-    /**
-     * Does the piece before a space look like part of an address?
-     *
-     * Running text ('see', 'Activity:') and CSS ('background:') do not. An
-     * authority mark, a bare 'http:' or 'https:', a domain ('.org/'), or a
-     * trailing '/', '.' or '-' do.
-     *
-     * @param string $token The piece before the spaces.
-     * @return bool
-     */
-    protected function looks_like_address_piece($token) {
-        $token = self::normalize($token);
-        if ($token === '') {
-            return false;
-        }
-        if (strpos($token, '//') !== false || strpos($token, '\\') !== false || preg_match('~^https?:$~i', $token)) {
-            return true;
-        }
-        return (bool)preg_match('~\.[a-z]{2,}(?::\d*)?(?:/|$)|[/.\-]$~i', $token);
     }
 
     /**

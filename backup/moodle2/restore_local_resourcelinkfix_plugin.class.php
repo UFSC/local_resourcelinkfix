@@ -221,10 +221,21 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     /**
      * The link reader for the current restore.
      *
+     * @param string $mode 'html', or 'js' for a .js file.
      * @return \local_resourcelinkfix\link_reader
      */
-    protected function reader() {
-        return new \local_resourcelinkfix\link_reader($this->oldwwwroot);
+    protected function reader($mode = 'html') {
+        return new \local_resourcelinkfix\link_reader($this->oldwwwroot, $mode);
+    }
+
+    /**
+     * How a file is read: as HTML, or as a .js file.
+     *
+     * @param string $filename Name of a file in the content area.
+     * @return string 'html' or 'js'.
+     */
+    protected function mode_of($filename) {
+        return preg_match('/\.js$/i', $filename) ? 'js' : 'html';
     }
 
     /**
@@ -241,12 +252,13 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      *
      * @param string $old Content before the rewrite.
      * @param string $new Content after the rewrite.
+     * @param string $mode 'html', or 'js' for a .js file.
      * @return bool False also when the check could not be made.
      */
-    protected function only_links_changed($old, $new) {
+    protected function only_links_changed($old, $new, $mode = 'html') {
         $rootpattern = $this->root_pattern();
-        $maskedold = $this->mask_links($old, $rootpattern);
-        $maskednew = $this->mask_links($new, $rootpattern);
+        $maskedold = $this->mask_links($old, $rootpattern, $mode);
+        $maskednew = $this->mask_links($new, $rootpattern, $mode);
 
         // Without a reliable mask there is no check: say no, to be safe.
         if ($maskedold === null || $maskednew === null) {
@@ -290,12 +302,13 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      *
      * @param string $content The content to mask.
      * @param string|null $rootpattern From root_pattern().
+     * @param string $mode 'html', or 'js' for a .js file.
      * @return string|null Null when PCRE aborts.
      */
-    protected function mask_links($content, $rootpattern) {
+    protected function mask_links($content, $rootpattern, $mode) {
         $masked = '';
         $pos = 0;
-        $ok = $this->reader()->each_link($content, function ($link) use ($content, $rootpattern, &$masked, &$pos) {
+        $ok = $this->reader($mode)->each_link($content, function ($link) use ($content, $rootpattern, &$masked, &$pos) {
             $prefix = $link['prefix'];
             if ($rootpattern !== null && substr_count($prefix, '//') === 1) {
                 $prefix = preg_replace($rootpattern, "\x00RLFROOT\x00", $prefix);
@@ -357,7 +370,8 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     protected function rewrite_file($fs, $file) {
         $old = $file->get_content();
         $this->linkcount = 0;
-        $new = $this->rewrite_links($old);
+        $mode = $this->mode_of($file->get_filename());
+        $new = $this->rewrite_links($old, $mode);
 
         // A preg_replace_callback() call returns null when PCRE aborts, without
         // throwing. Treating that as "new content" would write an empty file
@@ -379,7 +393,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         // Guard: nothing but the links may have changed. If something did, the
         // file stays as it is and both contents go to the log, so what would be
         // lost can be seen.
-        if (!$this->only_links_changed($old, $new)) {
+        if (!$this->only_links_changed($old, $new, $mode)) {
             $this->task->get_logger()->process(
                 get_string('errorcontentlost', 'local_resourcelinkfix', (object)[
                     'file' => $file->get_filepath() . $file->get_filename(),
@@ -468,12 +482,13 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * links. Unmapped ids stay untouched.
      *
      * @param string $content Content of a file.
+     * @param string $mode 'html', or 'js' for a .js file.
      * @return string|null Null when PCRE aborts.
      */
-    protected function rewrite_links($content) {
+    protected function rewrite_links($content, $mode = 'html') {
         $output = '';
         $pos = 0;
-        $ok = $this->reader()->each_link($content, function ($link) use ($content, &$output, &$pos) {
+        $ok = $this->reader($mode)->each_link($content, function ($link) use ($content, &$output, &$pos) {
             $original = substr($content, $link['start'], $link['end'] - $link['start']);
             $output .= substr($content, $pos, $link['start'] - $pos) . $this->rewrite_link($link, $original);
             $pos = $link['end'];
