@@ -53,6 +53,9 @@ class link_reader {
     /** Characters browsers drop from inside a URL. */
     const DROPPED = "\t\n\r";
 
+    /** Characters of a plain relative path: segments and slashes. */
+    const PATHCHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.~%-/';
+
     /** @var string Source wwwroot without its scheme ('site/moodle'); empty when unknown. */
     protected $source;
 
@@ -172,19 +175,23 @@ class link_reader {
     /**
      * Text as a browser reads it inside a URL.
      *
-     * Line breaks and tabs dropped, HTML entities decoded ('&#47;', '&sol;'),
-     * backslashes as slashes. The prefix and the piece before a space go
-     * through the same function, so they cannot disagree on what an address is.
+     * HTML entities decoded ('&#47;', '&sol;', '&Tab;'), then line breaks and
+     * tabs dropped - the order a browser follows. The prefix and the piece
+     * before a space go through the same function, so they cannot disagree on
+     * what an address is.
+     *
+     * Backslashes stay: a backslash may be a path separator or an escape
+     * ('\x2f' in JS, '\00002f' in CSS), and any prefix holding one is left
+     * alone.
      *
      * @param string $text Text from the content.
      * @return string
      */
     public static function normalize($text) {
-        $text = str_replace(str_split(self::DROPPED), '', $text);
         if (strpos($text, '&') !== false) {
             $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         }
-        return strtr($text, '\\', '/');
+        return str_replace(str_split(self::DROPPED), '', $text);
     }
 
     /**
@@ -197,9 +204,10 @@ class link_reader {
      * - more than one '//': two URLs glued together, or one URL carried in
      *   another's parameter, and there is no telling which the path belongs to;
      * - a scheme other than http or https, or credentials;
-     * - a segment that looks like a domain, a scheme with a single slash, or a
-     *   space right after a piece that looks like part of an address: a URL
-     *   whose start is out of the prefix;
+     * - a relative prefix that is not a plain path after a plain lead (see
+     *   is_plain_lead()), a segment that looks like a domain, or a space right
+     *   after a piece that looks like part of an address: a URL whose start is
+     *   out of the prefix, or an encoded or escaped one;
      * - an absolute URL whose base is not exactly the source's wwwroot.
      *
      * The prefix is read the way a browser reads it (see normalize()). A
@@ -234,25 +242,39 @@ class link_reader {
      *                    of an address whose start is out of sight.
      */
     protected function read_relative_prefix($prefix, $token) {
-        if ($this->looks_like_address_piece($token)) {
+        if ($this->looks_like_address_piece($token) || strpos($prefix, '\\') !== false) {
             return false;
         }
-        // A scheme with one slash or none: browsers read 'https:/host' as
-        // 'https://host', and 'http:host' too on a page with another scheme.
-        if (preg_match('~https?:~i', $prefix)) {
+        // Only a plain path after a plain lead is relative. The path is the
+        // longest tail of path characters; everything before it is the lead.
+        $pathlength = strspn(strrev($prefix), self::PATHCHARS);
+        $lead = (string)substr($prefix, 0, strlen($prefix) - $pathlength);
+        if (!$this->is_plain_lead($lead) || substr($lead, -1) === '@') {
             return false;
         }
-        // Credentials: an '@' followed by a host. An '@' elsewhere ('@media'
-        // in CSS) says nothing about the address.
-        if (preg_match('~@[a-z0-9.\-\[\]:]+/~i', $prefix)) {
-            return false;
-        }
-        foreach (explode('/', $prefix) as $segment) {
-            if (preg_match('~\.[a-z]{2,}(?::\d+)?$~i', $segment)) {
+        foreach (explode('/', (string)substr($prefix, -$pathlength)) as $segment) {
+            if ($pathlength && preg_match('~\.[a-z]{2,}(?::\d+)?$~i', $segment)) {
                 return false;
             }
         }
         return null;
+    }
+
+    /**
+     * Is the text before a path or a URL plain - 'url(', 'href=', 'go("'?
+     *
+     * A slash, a scheme, a numeric character reference or a backslash there
+     * means the path or URL may continue something else: a folder, another
+     * address, an encoded or escaped one.
+     *
+     * @param string $lead The text before the path or URL, normalised.
+     * @return bool
+     */
+    protected function is_plain_lead($lead) {
+        return strpos($lead, '/') === false
+            && strpos($lead, '\\') === false
+            && strpos($lead, '&#') === false
+            && !preg_match('~https?:~i', $lead);
     }
 
     /**
@@ -270,7 +292,7 @@ class link_reader {
         if ($token === '') {
             return false;
         }
-        if (strpos($token, '//') !== false || preg_match('~^https?:$~i', $token)) {
+        if (strpos($token, '//') !== false || strpos($token, '\\') !== false || preg_match('~^https?:$~i', $token)) {
             return true;
         }
         return (bool)preg_match('~\.[a-z]{2,}(?::\d*)?(?:/|$)|[/.\-]$~i', $token);
@@ -295,7 +317,12 @@ class link_reader {
         if (!$this->is_source_base(substr($prefix, $pos + 2))) {
             return false;
         }
-        return [substr($prefix, 0, $start), $start < $pos];
+        // The URL must start the address, not be carried in another's parameter.
+        $lead = substr($prefix, 0, $start);
+        if (!$this->is_plain_lead($lead)) {
+            return false;
+        }
+        return [$lead, $start < $pos];
     }
 
     /**
