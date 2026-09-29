@@ -617,4 +617,162 @@ final class rewrite_links_test extends advanced_testcase {
         $this->assertSame('', $plugin->rewrite(''));
         $this->assertSame('<p>texto</p>', $plugin->rewrite('<p>texto</p>'));
     }
+
+    /**
+     * Two URLs glued in the same run are left alone, and nothing is lost.
+     *
+     * The decision used the last URL of the prefix and the replacement started
+     * at the first one, so the first url() - an image from a CDN - was deleted
+     * from the file, and the guard let it through.
+     */
+    public function test_two_glued_urls_are_preserved(): void {
+        $plugin = $this->plugin();
+        $css = '.x{background:url(http://cdn.example.com/a.png),url(' . self::SOURCE
+            . '/mod/page/view.php?id=101)}';
+        $this->assertSame($css, $plugin->rewrite($css));
+        $this->assertNull($plugin->rewrite_file_for_test('<style>' . $css . '</style>'));
+    }
+
+    /**
+     * A link from a third site that carries the source's URL in a parameter
+     * belongs to the third site.
+     */
+    public function test_third_site_wrapping_source_url_is_preserved(): void {
+        $plugin = $this->plugin();
+        $url = self::THIRD . '/r.php?u=' . self::SOURCE . '/mod/page/view.php?id=101';
+        $this->assertSame($url, $plugin->rewrite($url));
+    }
+
+    /**
+     * Another Moodle in a subfolder of the source's host is another site.
+     *
+     * The base was compared by "starts with", so the subfolder passed for the
+     * source, was dropped, and the link pointed to an activity here.
+     */
+    public function test_other_moodle_in_subfolder_of_source_host_is_preserved(): void {
+        $plugin = $this->plugin();
+        $url = self::SOURCE . '/outro/mod/page/view.php?id=101';
+        $this->assertSame($url, $plugin->rewrite($url));
+    }
+
+    /**
+     * A split host followed by a subfolder is preserved, like one without it.
+     *
+     * The space leaves the scheme out of the prefix, and only the last
+     * segment was checked for a domain - with a subfolder, it is 'moodle'.
+     */
+    public function test_split_host_with_subfolder_is_preserved(): void {
+        $plugin = $this->plugin();
+        $cases = [
+            'space after the scheme' => 'https:// terceiro.example.com/moodle/mod/page/view.php?id=101',
+            'split third site'       => 'https://ter- ceiro.example.com/moodle/mod/page/view.php?id=101',
+            'split source'           => 'https://ori- gem.example.org/moodle/mod/page/view.php?id=101',
+        ];
+        foreach ($cases as $name => $url) {
+            $this->assertSame($url, $plugin->rewrite($url), 'should preserve: ' . $name);
+        }
+    }
+
+    /**
+     * A scheme-less source URL after a lead ('url(') is fixed, like one with a scheme.
+     */
+    public function test_schemeless_source_after_lead_is_fixed(): void {
+        $plugin = $this->plugin();
+        $this->assertSame(
+            'url(//destino.example.net/mod/page/view.php?id=201)',
+            $plugin->rewrite('url(//origem.example.org/mod/page/view.php?id=101)')
+        );
+    }
+
+    /**
+     * A source URL with another scheme than original_wwwroot's is still the
+     * source, and the file with it is written.
+     */
+    public function test_source_with_other_scheme_is_fixed_and_written(): void {
+        $plugin = $this->plugin();
+        $old = '<a href="http://origem.example.org/mod/page/view.php?id=101">A</a>';
+        $this->assertSame(
+            '<a href="' . self::TARGET . '/mod/page/view.php?id=201">A</a>',
+            $plugin->rewrite_file_for_test($old)
+        );
+    }
+
+    /**
+     * A source URL with credentials is preserved: the credentials are not
+     * this site's, and dropping them would change more than the link.
+     */
+    public function test_source_with_credentials_is_preserved(): void {
+        $plugin = $this->plugin();
+        $url = 'https://prof@origem.example.org/mod/page/view.php?id=101';
+        $this->assertSame($url, $plugin->rewrite($url));
+    }
+
+    /**
+     * The prefix limit, at its boundaries.
+     *
+     * The prefix is read up to 300 characters. Past that, the start of the
+     * URL is out of sight, and a third site's '://' could fall out of the
+     * window: the URL was then read as relative and its id remapped. A
+     * prefix longer than the limit is now left alone, whatever it is.
+     */
+    public function test_prefix_limit_boundaries(): void {
+        // Source in a subfolder long enough to put the prefix at each length.
+        // 'https://origem.example.org/' has 27 characters, plus the folder and its slash.
+        foreach ([299 => true, 300 => true, 301 => false] as $length => $fixed) {
+            $root = 'https://origem.example.org/' . str_repeat('a', $length - 28);
+            $plugin = new local_resourcelinkfix_testable_plugin();
+            $plugin->set_restore_state([
+                'cmmap' => [101 => 201],
+                'oldcourseid' => 42, 'newcourseid' => 77,
+                'oldwwwroot' => $root,
+                'newwwwroot' => self::TARGET,
+            ]);
+            $url = $root . '/mod/page/view.php?id=101';
+            $this->assertSame($length, strlen($root . '/'), 'prefix length');
+            $expected = $fixed ? self::TARGET . '/mod/page/view.php?id=201' : $url;
+            $this->assertSame($expected, $plugin->rewrite($url), 'source, prefix of ' . $length);
+        }
+
+        // Third site: preserved at every length, including past the limit.
+        $plugin = $this->plugin();
+        foreach ([299, 300, 301, 306, 307, 400] as $length) {
+            $root = 'https://terceiro.example.com/' . str_repeat('x', $length - 30);
+            $this->assertSame($length, strlen($root . '/'), 'prefix length');
+            $url = $root . '/mod/page/view.php?id=101';
+            $this->assertSame($url, $plugin->rewrite($url), 'third site, prefix of ' . $length);
+        }
+    }
+
+    /**
+     * The guard sees text lost inside the prefix.
+     *
+     * It masked the whole match, prefix included, so anything the rewrite
+     * dropped there was invisible to it.
+     */
+    public function test_guard_blocks_text_lost_in_prefix(): void {
+        $plugin = $this->plugin();
+        $this->assertFalse($plugin->only_links_differ(
+            '<p>a</p>foo,bar/../../mod/page/view.php?id=101<p>b</p>',
+            '<p>a</p>../../mod/page/view.php?id=201<p>b</p>'
+        ));
+        $this->assertFalse($plugin->only_links_differ(
+            'url(http://cdn.example.com/a.png),url(' . self::SOURCE . '/mod/page/view.php?id=101)',
+            'url(' . self::TARGET . '/mod/page/view.php?id=201)'
+        ));
+    }
+
+    /**
+     * The guard still accepts the source's authority becoming this site's.
+     */
+    public function test_guard_accepts_authority_change(): void {
+        $plugin = $this->plugin();
+        $this->assertTrue($plugin->only_links_differ(
+            '<a href="' . self::SOURCE . '/mod/page/view.php?id=101">A</a>',
+            '<a href="' . self::TARGET . '/mod/page/view.php?id=201">A</a>'
+        ));
+        $this->assertTrue($plugin->only_links_differ(
+            'url(//origem.example.org/mod/page/view.php?id=101)',
+            'url(//destino.example.net/mod/page/view.php?id=201)'
+        ));
+    }
 }

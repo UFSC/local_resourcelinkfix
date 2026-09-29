@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=0adb26e300d0d3f79a728030de62b359b9568489fcb7c3f1aa3624cbcaec2340 -->
+<!-- sync: README.md sha256=c5f1ad06a0bd77858fe38a6cc35ec59bd23a5286a0800f60ecfe1da040f6fd54 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -50,9 +50,13 @@ um cmid já reescrito não é remapeado.
 ### Na dúvida sobre a URL, não se toca
 
 O plugin não tenta adivinhar a forma de um endereço. Quando há indício de URL
-absoluta — `://`, `//` no início, credencial, ou um último segmento que pareça
-domínio — e a base não pode ser confirmada como a do site de origem, o link
-fica exatamente como está.
+absoluta — `//`, credencial, ou um segmento que pareça domínio — e a base não
+pode ser confirmada como exatamente a do site de origem, o link fica
+exatamente como está. Também fica quando o texto colado antes do caminho não
+pode ser lido inteiro: duas URLs coladas (`url(a),url(b)` em CSS), uma URL
+levada no parâmetro de outra (`outro/r.php?u=origem/mod/...`), ou mais de 300
+caracteres colados antes do caminho. Outro Moodle numa subpasta do host de
+origem é outro site.
 
 Isso vale inclusive para formas que o plugin não sabe ler: IPv6
 (`https://[2001:db8::1]/...`), domínio com underscore, caminho longo, barra
