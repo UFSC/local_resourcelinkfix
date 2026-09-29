@@ -50,9 +50,17 @@ rewritten is not remapped.
 The plugin does not guess the shape of an address. When there is a hint of an absolute URL —
 `//`, credentials, or a segment that looks like a domain — and the base cannot be confirmed as
 exactly the source site's, the link stays exactly as it is. It also stays when the text glued
-before the path cannot be read whole: two URLs glued together (`url(a),url(b)` in CSS), a URL
-carried in another's parameter (`other/r.php?u=source/mod/...`), or more than 300 characters
-glued before the path. Another Moodle in a subfolder of the source's host is another site.
+before the path cannot be read whole: two URLs glued together (`url(a),url(b)` in CSS), or a
+URL carried in another's parameter (`other/r.php?u=source/mod/...`). Another Moodle in a
+subfolder of the source's host is another site; the host is compared ignoring case, the path
+is not.
+
+The text glued before the path is read back to the start of the run (a space, a quote, an angle
+bracket) or to the previous link, whatever its length: every link in minified CSS or in an
+`onclick` is read. When that text follows a space, a line break or a tab, the piece right
+before them is checked too: browsers drop line breaks and tabs from a URL, and PDFs split
+addresses with spaces. If that piece looks like part of an address (`//`, a dot followed by
+letters, or a trailing `/`, `:`, `.` or `-`), the link stays as it is.
 
 This holds even for forms the plugin cannot read: IPv6 (`https://[2001:db8::1]/...`), a domain
 with an underscore, a long path, a double slash, a non-HTTP scheme. Failing to recognise an
@@ -318,11 +326,15 @@ needs PHP 7.1, and moodle-cs forbids `list()`. Use index access (`$a = $pair[0];
 - **A host split by hyphenation is not fixed.** Text pasted from a PDF arrives with the domain
   broken (`https:// site`, `exam- ple`, `site. org`). Since the space prevents reading the whole
   URL, the link is preserved rather than guessed.
-- **A URL with a literal space in the path** (`https://site/folder with space/mod/...`) is read
-  as a relative path, and the id may be remapped even though it belongs to another site. An
-  address with a space is malformed — the correct form is `%20`, which the plugin handles
-  normally. Closing this case would stop the plugin from fixing relative links preceded by text
-  containing `://`, which are more common.
+- **A URL with a literal space in the path** is preserved when the piece right before the
+  space looks like part of an address (`https://site/moodle 2/mod/...`). With several words
+  (`https://site/folder with space/mod/...`), that piece is a plain word, the path is read as
+  relative, and the id may be remapped even though it belongs to another site. An address with a
+  space is malformed — the correct form is `%20`, which the plugin handles normally. Looking
+  further back would stop the plugin from fixing relative links preceded by running text that
+  holds an address, which are more common.
+- **The guard protects the content, not the choice of links.** It refuses a file where anything
+  outside the links changed; it does not judge which links should have been rewritten.
 - **Relative** links to an activity not in the backup keep pointing to this site with a foreign
   id — there is no old host to preserve.
 - External files/aliases (`is_external_file()`) are ignored on purpose.

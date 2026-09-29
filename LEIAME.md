@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=c5f1ad06a0bd77858fe38a6cc35ec59bd23a5286a0800f60ecfe1da040f6fd54 -->
+<!-- sync: README.md sha256=53a4dce6384627828a37e9ca7779d74c3379dac2ad97874e2b66579a240eb5c4 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -53,10 +53,19 @@ O plugin não tenta adivinhar a forma de um endereço. Quando há indício de UR
 absoluta — `//`, credencial, ou um segmento que pareça domínio — e a base não
 pode ser confirmada como exatamente a do site de origem, o link fica
 exatamente como está. Também fica quando o texto colado antes do caminho não
-pode ser lido inteiro: duas URLs coladas (`url(a),url(b)` em CSS), uma URL
-levada no parâmetro de outra (`outro/r.php?u=origem/mod/...`), ou mais de 300
-caracteres colados antes do caminho. Outro Moodle numa subpasta do host de
-origem é outro site.
+pode ser lido inteiro: duas URLs coladas (`url(a),url(b)` em CSS), ou uma URL
+levada no parâmetro de outra (`outro/r.php?u=origem/mod/...`). Outro Moodle
+numa subpasta do host de origem é outro site; o host é comparado sem
+diferenciar maiúsculas, o caminho não.
+
+O texto colado antes do caminho é lido de volta até o início do trecho (um
+espaço, uma aspa, um sinal de maior ou menor) ou até o link anterior, qualquer
+que seja o tamanho: todo link de um CSS minificado ou de um `onclick` é lido.
+Quando esse texto vem depois de um espaço, de uma quebra de linha ou de uma
+tabulação, o pedaço logo antes deles também é conferido: o navegador descarta
+quebras de linha e tabulações da URL, e o PDF parte endereços com espaços. Se
+esse pedaço parece parte de um endereço (`//`, um ponto seguido de letras, ou
+`/`, `:`, `.` ou `-` no fim), o link fica como está.
 
 Isso vale inclusive para formas que o plugin não sabe ler: IPv6
 (`https://[2001:db8::1]/...`), domínio com underscore, caminho longo, barra
@@ -328,11 +337,17 @@ Atender ao Moodle 3.0 (PHP 5.6) e ao moodle-cs ao mesmo tempo impede a desestrut
 - **Host partido por hifenização não é corrigido.** Texto colado de PDF chega
   com o domínio quebrado (`https:// site`, `exam- ple`, `site. org`). Como o
   espaço impede ler a URL inteira, o link é preservado em vez de adivinhado.
-- **URL com espaço literal no caminho** (`https://site/pasta com espaco/mod/...`)
-  é lida como caminho relativo, e o id pode ser remapeado mesmo sendo de outro
-  site. Endereço com espaço é malformado — o correto é `%20`, que o plugin trata
-  normalmente. Fechar esse caso faria o plugin deixar de corrigir links
-  relativos precedidos de texto com `://`, que são mais comuns.
+- **URL com espaço literal no caminho** é preservada quando o pedaço logo antes
+  do espaço parece parte de um endereço (`https://site/moodle 2/mod/...`). Com
+  várias palavras (`https://site/pasta com espaco/mod/...`), esse pedaço é uma
+  palavra comum, o caminho é lido como relativo, e o id pode ser remapeado mesmo
+  sendo de outro site. Endereço com espaço é malformado — o correto é `%20`,
+  que o plugin trata normalmente. Olhar mais para trás faria o plugin deixar de
+  corrigir links relativos precedidos de texto corrido com um endereço, que são
+  mais comuns.
+- **A trava protege o conteúdo, não a escolha dos links.** Ela recusa o
+  arquivo em que algo fora dos links mudou; não julga quais links deveriam ter
+  sido reescritos.
 - Links **relativos** para atividade que não veio no backup continuam
   apontando para este site com um id alheio — não há host antigo a preservar.
 - Arquivos externos/alias (`is_external_file()`) são ignorados de propósito.

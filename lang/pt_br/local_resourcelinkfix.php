@@ -62,7 +62,7 @@ $string['cli_jswithlinks'] = 'deles, com link de atividade';
 $string['cli_missing'] = '{$a} arquivo(s) sem conteúdo no filedir foram ignorados.
 Isso acontece quando o banco veio de outra instalação sem o moodledata:
 a medição então cobre apenas parte do acervo.';
-$string['cli_otherhost'] = 'preservados: host de outro site';
+$string['cli_otherhost'] = 'preservados: outro site ou ilegível';
 $string['cli_otherscript'] = 'escapam: script fora do padrão';
 $string['cli_relative'] = '(relativo)';
 $string['cli_resourcescourse'] = 'Recursos analisados (curso {$a})';
