@@ -240,42 +240,78 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     protected function read_prefix($prefix) {
         $marks = substr_count($prefix, '//');
         if ($marks === 0) {
-            if (strpos($prefix, '@') !== false) {
-                return false;
-            }
-            foreach (explode('/', $prefix) as $segment) {
-                if (preg_match('~\.[a-z]{2,}(?::\d+)?$~i', $segment)) {
-                    return false;
-                }
-            }
-            return null;
+            return $this->read_relative_prefix($prefix);
         }
-        if ($marks > 1 || $this->oldwwwroot === '') {
+        if ($marks > 1) {
             return false;
         }
+        return $this->read_absolute_prefix($prefix);
+    }
 
+    /**
+     * Reads a prefix without an authority mark.
+     *
+     * @param string $prefix
+     * @return false|null Null for a relative path; false when it may be a
+     *                    host whose scheme was cut off, or has credentials.
+     */
+    protected function read_relative_prefix($prefix) {
+        if (strpos($prefix, '@') !== false) {
+            return false;
+        }
+        foreach (explode('/', $prefix) as $segment) {
+            if (preg_match('~\.[a-z]{2,}(?::\d+)?$~i', $segment)) {
+                return false;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Reads a prefix with a single authority mark.
+     *
+     * @param string $prefix
+     * @return array|false For the source site, [lead, whether the URL has a
+     *                     scheme]; false otherwise.
+     */
+    protected function read_absolute_prefix($prefix) {
+        if ($this->oldwwwroot === '') {
+            return false;
+        }
         $pos = strpos($prefix, '//');
-        $start = $pos;
-        $hasscheme = ($pos > 0 && $prefix[$pos - 1] === ':');
-        if ($hasscheme) {
-            $start = $pos - 1;
-            while ($start > 0 && preg_match('~[a-z0-9+.\-]~i', $prefix[$start - 1])) {
-                $start--;
-            }
-            if (!preg_match('~^https?$~i', substr($prefix, $start, $pos - 1 - $start))) {
-                return false;
-            }
-        }
-
-        // The base must be the source's wwwroot, whole: 'site/' is not 'site/other/'.
-        $base = substr($prefix, $pos + 2);
-        if (strpos($base, '@') !== false) {
+        $start = $this->url_start($prefix, $pos);
+        if ($start === false) {
             return false;
         }
+
+        // The base must be the source's wwwroot, whole: 'site/' is not
+        // 'site/other/', nor 'user@site/'.
+        $base = substr($prefix, $pos + 2);
         if (strcasecmp($base, $this->strip_scheme($this->oldwwwroot) . '/') !== 0) {
             return false;
         }
-        return [substr($prefix, 0, $start), $hasscheme];
+        return [substr($prefix, 0, $start), $start < $pos];
+    }
+
+    /**
+     * Where the URL starts: at its scheme, or at the '//' when it has none.
+     *
+     * @param string $prefix
+     * @param int $pos Position of the '//'.
+     * @return int|false False for a scheme other than http or https.
+     */
+    protected function url_start($prefix, $pos) {
+        if ($pos === 0 || $prefix[$pos - 1] !== ':') {
+            return $pos;
+        }
+        $start = $pos - 1;
+        while ($start > 0 && preg_match('~[a-z0-9+.\-]~i', $prefix[$start - 1])) {
+            $start--;
+        }
+        if (!preg_match('~^https?$~i', substr($prefix, $start, $pos - 1 - $start))) {
+            return false;
+        }
+        return $start;
     }
 
     /**
