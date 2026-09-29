@@ -23,6 +23,7 @@
  */
 
 namespace local_resourcelinkfix;
+
 /**
  * Finds links and reads the text glued before each one.
  *
@@ -161,9 +162,29 @@ class link_reader {
         if ($prefixlength >= strlen($reversed) || strpos(self::SPACES, $reversed[$prefixlength]) === false) {
             return '';
         }
-        $tokenstart = $prefixlength + strspn($reversed, self::SPACES, $prefixlength);
+        // Spaces and line breaks together: a line may end in a space and the
+        // next start with an indent.
+        $tokenstart = $prefixlength + strspn($reversed, self::SPACES . self::DROPPED, $prefixlength);
         $tokenlength = strcspn($reversed, self::DELIMITERS, $tokenstart);
         return strrev((string)substr($reversed, $tokenstart, $tokenlength));
+    }
+
+    /**
+     * Text as a browser reads it inside a URL.
+     *
+     * Line breaks and tabs dropped, HTML entities decoded ('&#47;', '&sol;'),
+     * backslashes as slashes. The prefix and the piece before a space go
+     * through the same function, so they cannot disagree on what an address is.
+     *
+     * @param string $text Text from the content.
+     * @return string
+     */
+    public static function normalize($text) {
+        $text = str_replace(str_split(self::DROPPED), '', $text);
+        if (strpos($text, '&') !== false) {
+            $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
+        return strtr($text, '\\', '/');
     }
 
     /**
@@ -181,10 +202,10 @@ class link_reader {
      *   whose start is out of the prefix;
      * - an absolute URL whose base is not exactly the source's wwwroot.
      *
-     * Browsers drop line breaks and tabs from a URL and read backslashes as
-     * slashes, so the prefix is read that way. A prefix that holds them is
-     * only trusted as a relative path: rewriting it as the source's would have
-     * to decide what to do with them.
+     * The prefix is read the way a browser reads it (see normalize()). A
+     * prefix that changes when normalised is only trusted as a relative path:
+     * rewriting it as the source's would have to decide what to do with what
+     * was normalised.
      *
      * @param string $prefix The text glued before the path.
      * @param string $token The piece before the spaces that precede the prefix, if any.
@@ -193,7 +214,7 @@ class link_reader {
      *                          the URL has a scheme].
      */
     public function read_prefix($prefix, $token = '') {
-        $clean = strtr(str_replace(str_split(self::DROPPED), '', $prefix), '\\', '/');
+        $clean = self::normalize($prefix);
         $marks = substr_count($clean, '//');
         if ($marks === 0) {
             return $this->read_relative_prefix($clean, $token);
@@ -207,7 +228,7 @@ class link_reader {
     /**
      * Reads a prefix without an authority mark.
      *
-     * @param string $prefix The prefix, without line breaks or tabs, with slashes for backslashes.
+     * @param string $prefix The prefix, normalised.
      * @param string $token The piece before the spaces that precede the prefix, if any.
      * @return false|null Null for a relative path; false when it may be part
      *                    of an address whose start is out of sight.
@@ -216,8 +237,9 @@ class link_reader {
         if ($this->looks_like_address_piece($token)) {
             return false;
         }
-        // A scheme with a single slash: browsers read 'https:/host' as 'https://host'.
-        if (preg_match('~(?<![a-z0-9+.\-])https?:/~i', $prefix)) {
+        // A scheme with one slash or none: browsers read 'https:/host' as
+        // 'https://host', and 'http:host' too on a page with another scheme.
+        if (preg_match('~https?:~i', $prefix)) {
             return false;
         }
         // Credentials: an '@' followed by a host. An '@' elsewhere ('@media'
@@ -244,14 +266,14 @@ class link_reader {
      * @return bool
      */
     protected function looks_like_address_piece($token) {
-        $token = str_replace(str_split(self::DROPPED), '', $token);
+        $token = self::normalize($token);
         if ($token === '') {
             return false;
         }
         if (strpos($token, '//') !== false || preg_match('~^https?:$~i', $token)) {
             return true;
         }
-        return (bool)preg_match('~\.[a-z]{2,}(?::\d+)?(?:/|$)|[/.\-]$~i', $token);
+        return (bool)preg_match('~\.[a-z]{2,}(?::\d*)?(?:/|$)|[/.\-]$~i', $token);
     }
 
     /**
