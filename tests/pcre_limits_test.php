@@ -221,7 +221,7 @@ final class pcre_limits_test extends advanced_testcase {
      * with a low memory_limit: within PHPUnit the peak already carries the
      * previous tests, and it cannot be reset before PHP 8.2.
      */
-    public function test_memory_does_not_grow_with_the_number_of_links() {
+    public function test_memory_does_not_grow_with_the_number_of_links(): void {
         global $CFG;
 
         $code = 'define("MOODLE_INTERNAL", 1);'
