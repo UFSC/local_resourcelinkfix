@@ -39,7 +39,8 @@ namespace local_resourcelinkfix;
  *   is exactly the source's wwwroot.
  * - A relative link is rewritten only where a link value starts: right after
  *   'href=', 'src=' or a CSS 'url(' - and, in a .js file, a string literal
- *   that starts a value. Anywhere else it is left alone.
+ *   assigned after '=' or ':'. Anywhere else, and in any file that mentions a
+ *   base address, it is left alone.
  *
  * DO NOT go back to reading the text before a relative path to guess whether
  * it is an address. That was tried through five review rounds, and each one
@@ -125,8 +126,8 @@ class link_reader {
      * @return bool False when PCRE aborts.
      */
     public function each_link($content, $visit) {
-        // With a <base href>, relative links resolve against another address.
-        $this->hasbase = $this->mode === self::MODE_HTML && preg_match('~<base\b[^>]*\bhref~i', $content);
+        // With a base address, relative links resolve against it.
+        $this->hasbase = self::mentions_base($content);
         $pattern = self::get_pattern();
         $offset = 0;
         while (true) {
@@ -157,6 +158,27 @@ class link_reader {
     }
 
     /**
+     * Does the content mention a base address anywhere?
+     *
+     * Any '<base', encoded ('&lt;base', as inside an iframe's srcdoc) or
+     * created by a script. The plugin does not try to tell where the <base>
+     * is or what it says - a '>' inside one of its attributes already fooled
+     * a pattern for that. A plain search is also linear: the pattern was
+     * quadratic without the PCRE JIT.
+     *
+     * @param string $content The content being read.
+     * @return bool
+     */
+    public static function mentions_base($content) {
+        foreach (['<base', '&lt;base', "createElement('base'", 'createElement("base"'] as $needle) {
+            if (stripos($content, $needle) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * All the links in the content, for short content and tests.
      *
      * @param string $content The content to read.
@@ -175,9 +197,10 @@ class link_reader {
      *
      * True at the start of the text, and right after the quote (or spaces)
      * that open the value of 'href=', 'src=' or a CSS 'url('. In a .js file,
-     * also right after a quote that opens a string starting a value: after
-     * '=', '(', ',', ':' or '['. Never after '+': that string continues
-     * another one.
+     * also right after a quote that opens a string assigned to something:
+     * after '=' or ':'. Never after '+', which continues another string, nor
+     * as an argument or an array item, which may be resolved against another
+     * base: new URL(path, base), [base, path].join('/'), base.concat(path).
      *
      * @param string $content The content being read.
      * @param int $start Offset where the run starts.
@@ -188,9 +211,10 @@ class link_reader {
             return true;
         }
         $window = substr($content, max(0, $start - 80), min(80, $start));
-        $opener = '(?:\b(?:href|src)\s*=|url\()(?:\s*["\']|\s+)';
+        // CSS writes 'url(' in lower case; JS has 'URL(' - new URL(path, base).
+        $opener = '(?:\b(?:href|src)\s*=|(?-i:url)\()(?:\s*["\']|\s+)';
         if ($this->mode === self::MODE_JS) {
-            $opener .= '|[=(,:\[]\s*["\']';
+            $opener .= '|[=:]\s*["\']';
         }
         return (bool)preg_match('~(?:' . $opener . ')$~i', $window);
     }
@@ -290,7 +314,7 @@ class link_reader {
      * @return bool
      */
     protected function lead_opens_value($lead) {
-        return $this->is_plain_lead($lead) && preg_match('~\b(?:href|src)=$|url\($~i', $lead);
+        return $this->is_plain_lead($lead) && preg_match('~\b(?:href|src)=$|(?-i:url)\($~i', $lead);
     }
 
     /**

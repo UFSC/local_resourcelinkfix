@@ -11,12 +11,16 @@ exactly where a link value starts:
 
 - in HTML: right after `href=` or `src=` (quoted or not), or a CSS `url(`;
 - in a `.js` file (only with the `rewritejs` setting on): also right after a quote that
-  opens a string starting a value — after `=`, `(`, `,`, `:` or `[` — never after `+`;
+  opens a string assigned after `=` or `:` — never after `+` (it continues another string),
+  nor as an argument or array item, which may be resolved against another base
+  (`new URL(path, base)`, `[base, path].join('/')`, `base.concat(path)`);
 - at the very start of the text.
 
-The path itself must be plain (letters, digits, `_ . ~ % -` and `/`), and a file that
-declares `<base href>` has no relative link rewritten. Anywhere else the link is left as it
-is.
+CSS `url(` is matched in lower case only, so that JS `new URL(` is not taken for it. The
+path itself must be plain (letters, digits, `_ . ~ % -` and `/`). A file that mentions a
+base address anywhere — `<base`, `&lt;base`, `createElement('base')` — has no relative link
+rewritten: the plugin does not try to tell where that base is or what it says. Anywhere else
+the link is left as it is.
 
 Absolute links are unaffected by this rule: they carry their own host, and are rewritten only
 when the base is exactly the source site's `wwwroot` (`link_reader::read_absolute_prefix()`).
@@ -61,6 +65,23 @@ Relative links in `onclick`, in inline `<script>`, in running text, after a `/` 
 run (`url(img/a.png)` or an inline image before `url(../mod/...)` in minified CSS), after
 `folder/index.php?next=`, or with a backslash are **not** rewritten. They stay as they were:
 stale, but pointing where they always pointed. A stale link is better than a silently wrong one.
+
+### Threat model
+
+The plugin protects **content written in good faith** — by teachers, authoring tools,
+exported packages — against being silently pointed at the wrong activity. It does not try to
+resist content **crafted to fool it**, such as a URL of another site whose path holds a quote
+followed by `href=` (`href="https://other/x'href=/../mod/..."`).
+
+The reason is what such content could gain: the rewritten link points to an address of
+**another site** with an id from here — an address its author could have written directly.
+The plugin grants no access and exposes no page of this site. Chasing crafted forms would be
+the same endless pursuit that items 1–9 above describe, where the harm is nil.
+
+Known crafted forms that are rewritten, on purpose left out of scope (review round 6): a
+quote, space or `<` followed by `href=`, `src=` or `url(` inside another site's URL
+(including in `<meta http-equiv="refresh">`), and a `:` inside a JS string. Also out of reach:
+a `<base>` declared in **another** file of the same package — each file is read on its own.
 
 ### Extending it safely
 

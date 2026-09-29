@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=8fee736cb717984d1988d10ece3f5429711bb673b1c8da03cc120f3d8c2308c8 -->
+<!-- sync: README.md sha256=285e654de60c365e36a00eb647c0915af67d444a52c82830715a92456bbd5a43 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -51,9 +51,10 @@ um cmid já reescrito não é remapeado.
 
 **Link relativo só é reescrito onde começa um valor de link** — logo depois de
 `href=` ou `src=` (com ou sem aspas) ou de um `url(` de CSS; num arquivo `.js`,
-também um literal de string que começa um valor (depois de `=`, `(`, `,`, `:`
-ou `[`, nunca depois de `+`). O caminho precisa ser simples, e arquivo com
-`<base href>` não tem link relativo reescrito. Em qualquer outro lugar —
+também um literal de string atribuído depois de `=` ou `:` (nunca depois de
+`+`, nem como argumento ou item de array). O caminho precisa ser simples, e
+arquivo que menciona um endereço base em qualquer lugar (`<base`, `&lt;base`,
+`createElement('base')`) não tem link relativo reescrito. Em qualquer outro lugar —
 `onclick`, `<script>` embutido, texto corrido — o link fica como está. O
 [DESIGN.md](DESIGN.md) registra o porquê: ler o texto antes de um caminho
 relativo para adivinhar se era endereço falhou em cinco rodadas de revisão,
@@ -343,12 +344,15 @@ Atender ao Moodle 3.0 (PHP 5.6) e ao moodle-cs ao mesmo tempo impede a desestrut
   espaço impede ler a URL inteira, o link é preservado em vez de adivinhado.
 - **Link relativo fora de um valor de link não é reescrito** (ver
   [DESIGN.md](DESIGN.md)): `onclick`, `<script>` embutido, texto corrido,
-  arquivo com `<base href>`, caminho depois de uma `/` no mesmo trecho
+  arquivo que menciona endereço base, caminho depois de uma `/` no mesmo trecho
   (`url(img/a.png)` ou imagem inline antes de `url(../mod/...)` em CSS
   minificado, `pasta/index.php?next=../mod/...`), ou caminho com barra
   invertida (`..\..\mod/...`).
 - **URL de origem depois de caractere codificado**
   (`login.php?a=1&amp;wantsurl=https://origem/...`) fica como está.
+- **Conteúdo montado para enganar o plugin fica fora do escopo** (ver o
+  modelo de ameaça no [DESIGN.md](DESIGN.md)): o link reescrito apontaria para
+  outro site — um endereço que o autor poderia ter escrito direto.
 - **A trava protege o conteúdo, não a escolha dos links.** Ela recusa o
   arquivo em que algo fora dos links mudou; não julga quais links deveriam ter
   sido reescritos.
