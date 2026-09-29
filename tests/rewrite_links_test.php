@@ -1147,6 +1147,7 @@ final class rewrite_links_test extends advanced_testcase {
             'parameter of another site' => '<a href="' . $other . '/mod/forum/view.php?id=5&amp;returnurl=/' . $path . '">x</a>',
             'JS concatenation'          => '<script>location.href="' . $other . '/"+"' . $path . '"</script>',
             'JS concatenation, slash'   => "<script>var u='" . $other . "'+'/" . $path . "'</script>",
+            'JS URL with a base'        => '<script>var u = new URL("' . $path . '", "' . $other . '/");</script>',
             'ftp, one slash'            => '<a href="ftp:/10.0.0.5/' . $path . '">x</a>',
             'ftp, no slash'             => '<a href="ftp:10.0.0.5/' . $path . '">x</a>',
             'ftp, single label'         => '<a href="ftp:moodle/' . $path . '">x</a>',
@@ -1177,29 +1178,78 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * In a .js file, a string literal that starts a value is a link value too.
      *
-     * Only when rewriting .js is on. A literal after '+' continues another
-     * string, and is left alone.
+     * Only when rewriting .js is on, and only after '=' or ':' - an
+     * assignment or a property. A literal after '+' continues another string;
+     * an argument or an array item may be resolved against another base.
      */
     public function test_string_literal_is_a_value_in_javascript(): void {
         $plugin = $this->plugin(true);
         $path = 'mod/page/view.php?id=101';
         $fixed = [
             'assignment' => "var u = '../../" . $path . "';",
-            'argument'   => 'go("../' . $path . '");',
             'property'   => "{ link: '../" . $path . "' }",
-            'array'      => "['../" . $path . "']",
         ];
         foreach ($fixed as $name => $js) {
             $this->assertStringContainsString('view.php?id=201', $plugin->rewrite($js, 'js'), 'should fix: ' . $name);
         }
+        // An argument or an array item may be resolved against another base:
+        // new URL(path, base), [base, path].join('/'), base.concat(path).
         $preserved = [
             'concatenation'        => 'location.href = "https://10.0.0.5/" + "' . $path . '";',
             'concatenation, slash' => "var u = 'https://10.0.0.5' + '/" . $path . "';",
+            'argument'             => 'go("../' . $path . '");',
+            'array'                => "['../" . $path . "']",
+            'new URL with a base'  => 'var u = new URL("' . $path . '", "https://10.0.0.5/");',
+            'join'                 => 'location.href = ["https://10.0.0.5", "' . $path . '"].join("/");',
+            'concat()'             => 'location.href = "https://10.0.0.5/".concat("' . $path . '");',
         ];
         foreach ($preserved as $name => $js) {
             $this->assertSame($js, $plugin->rewrite($js, 'js'), 'should preserve: ' . $name);
         }
         // The same literal in an HTML file is not a link value.
         $this->assertSame($fixed['assignment'], $plugin->rewrite($fixed['assignment']));
+    }
+    /**
+     * Any mention of a base address leaves the file's relative links alone.
+     *
+     * The plugin does not try to parse where a <base> is or what it says: a
+     * '>' inside one of its attributes, a <base> encoded inside an iframe's
+     * srcdoc or created by a script all change how relative links resolve.
+     */
+    public function test_any_base_leaves_relative_links_alone(): void {
+        $plugin = $this->plugin(true);
+        $link = '<a href="mod/page/view.php?id=101">x</a>';
+        $html = [
+            'quoted greater-than'  => '<base target=">" href="https://10.0.0.5/">' . $link,
+            'encoded in srcdoc'    => '<iframe srcdoc="&lt;base href=\'https://10.0.0.5/\'&gt;'
+                . '&lt;a href=\'mod/page/view.php?id=101\'&gt;">',
+            'created by a script'  => "<script>var b = document.createElement('base');"
+                . " b.href = 'https://10.0.0.5/';</script>" . $link,
+            'double-quoted create' => '<script>document.head.append(document.createElement("base"))</script>' . $link,
+        ];
+        foreach ($html as $name => $content) {
+            $this->assertSame($content, $plugin->rewrite($content), 'should preserve: ' . $name);
+        }
+        $js = "document.write('<base href=\"https://10.0.0.5/\">'); location.href = 'mod/page/view.php?id=101';";
+        $this->assertSame($js, $plugin->rewrite($js, 'js'));
+    }
+
+    /**
+     * Looking for a base address takes linear time.
+     *
+     * A pattern scanning up to the next '>' after each '<base' was quadratic
+     * without the PCRE JIT - which PHP 5.6 does not have: 7.4 s for 20,000
+     * '<base ' with no '>'.
+     */
+    public function test_looking_for_a_base_is_linear(): void {
+        $plugin = $this->plugin();
+        $content = '<!--' . str_repeat('<base ', 20000) . '--><a href="../mod/page/view.php?id=101">x</a>';
+
+        $start = microtime(true);
+        $result = $plugin->rewrite($content);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertSame($content, $result);
+        $this->assertLessThan(0.5, $elapsed, 'took ' . round($elapsed, 2) . ' s');
     }
 }

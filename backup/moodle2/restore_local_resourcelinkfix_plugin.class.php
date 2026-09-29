@@ -224,7 +224,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * @param string $mode 'html', or 'js' for a .js file.
      * @return \local_resourcelinkfix\link_reader
      */
-    protected function reader($mode = 'html') {
+    protected function reader($mode = \local_resourcelinkfix\link_reader::MODE_HTML) {
         return new \local_resourcelinkfix\link_reader($this->oldwwwroot, $mode);
     }
 
@@ -235,7 +235,9 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * @return string 'html' or 'js'.
      */
     protected function mode_of($filename) {
-        return preg_match('/\.js$/i', $filename) ? 'js' : 'html';
+        return preg_match('/\.js$/i', $filename)
+            ? \local_resourcelinkfix\link_reader::MODE_JS
+            : \local_resourcelinkfix\link_reader::MODE_HTML;
     }
 
     /**
@@ -255,7 +257,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * @param string $mode 'html', or 'js' for a .js file.
      * @return bool False also when the check could not be made.
      */
-    protected function only_links_changed($old, $new, $mode = 'html') {
+    protected function only_links_changed($old, $new, $mode = \local_resourcelinkfix\link_reader::MODE_HTML) {
         $rootpattern = $this->root_pattern();
         $maskedold = $this->mask_links($old, $rootpattern, $mode);
         $maskednew = $this->mask_links($new, $rootpattern, $mode);
@@ -485,7 +487,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * @param string $mode 'html', or 'js' for a .js file.
      * @return string|null Null when PCRE aborts.
      */
-    protected function rewrite_links($content, $mode = 'html') {
+    protected function rewrite_links($content, $mode = \local_resourcelinkfix\link_reader::MODE_HTML) {
         $output = '';
         $pos = 0;
         $ok = $this->reader($mode)->each_link($content, function ($link) use ($content, &$output, &$pos) {

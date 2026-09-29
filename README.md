@@ -48,9 +48,10 @@ rewritten is not remapped.
 ### When in doubt about the URL, leave it alone
 
 **Relative links are rewritten only where a link value starts** — right after `href=` or
-`src=` (quoted or not) or a CSS `url(`; in a `.js` file, also a string literal that starts a
-value (after `=`, `(`, `,`, `:` or `[`, never after `+`). The path must be plain, and a file
-with `<base href>` has no relative link rewritten. Anywhere else — `onclick`, inline
+`src=` (quoted or not) or a CSS `url(`; in a `.js` file, also a string literal assigned after
+`=` or `:` (never after `+`, nor as an argument or array item). The path must be plain, and a
+file that mentions a base address anywhere (`<base`, `&lt;base`, `createElement('base')`) has
+no relative link rewritten. Anywhere else — `onclick`, inline
 `<script>`, running text — the link stays as it is. [DESIGN.md](DESIGN.md) records why:
 reading the text before a relative path to guess whether it was an address failed through five
 review rounds, each finding another form a browser reads as another site. **Do not reintroduce
@@ -330,11 +331,14 @@ needs PHP 7.1, and moodle-cs forbids `list()`. Use index access (`$a = $pair[0];
   broken (`https:// site`, `exam- ple`, `site. org`). Since the space prevents reading the whole
   URL, the link is preserved rather than guessed.
 - **Relative links outside a link value are not rewritten** (see [DESIGN.md](DESIGN.md)):
-  `onclick`, inline `<script>`, running text, a file with `<base href>`, a path after a `/` in
+  `onclick`, inline `<script>`, running text, a file that mentions a base address, a path after a `/` in
   the same run (`url(img/a.png)` or an inline image before `url(../mod/...)` in minified CSS,
   `folder/index.php?next=../mod/...`), or a path with a backslash (`..\..\mod/...`).
 - **A source URL after an encoded character** (`login.php?a=1&amp;wantsurl=https://source/...`)
   is left alone.
+- **Content crafted to fool the plugin is out of scope** (see the threat model in
+  [DESIGN.md](DESIGN.md)): the rewritten link would point to another site — an address its
+  author could have written directly.
 - **The guard protects the content, not the choice of links.** It refuses a file where anything
   outside the links changed; it does not judge which links should have been rewritten.
 - **Relative** links to an activity not in the backup keep pointing to this site with a foreign
