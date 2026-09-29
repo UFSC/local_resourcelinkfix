@@ -47,9 +47,24 @@ rewritten is not remapped.
 
 ### When in doubt about the URL, leave it alone
 
-The plugin does not guess the shape of an address. When there is a hint of an absolute URL —
-`://`, a leading `//`, credentials, or a last segment that looks like a domain — and the base
-cannot be confirmed as the source site's, the link stays exactly as it is.
+**Relative links are rewritten only where a link value starts** — right after `href=` or
+`src=` (quoted or not) or a CSS `url(`; in a `.js` file, also a string literal assigned after
+`=` or `:` (never after `+`, nor as an argument or array item). The path must be plain, and a
+file that mentions a base address anywhere (`<base`, `&lt;base`, `createElement('base')`) has
+no relative link rewritten. Anywhere else — `onclick`, inline
+`<script>`, running text — the link stays as it is. [DESIGN.md](DESIGN.md) records why:
+reading the text before a relative path to guess whether it was an address failed through five
+review rounds, each finding another form a browser reads as another site. **Do not reintroduce
+it**; extend the list of value openers instead.
+
+**Absolute links** are rewritten only when the base is exactly the source site's `wwwroot`.
+When there is a hint of an absolute URL — `//`, a scheme with one slash or none (`https:/host`,
+`http:host`), credentials — and the base cannot be confirmed, the link stays exactly as it is.
+It also stays when two URLs are glued together (`url(a),url(b)` in CSS), when the URL is
+carried in another's parameter (`other/r.php?u=source/mod/...`), or when anything before it is
+not plain (a slash, a scheme, an entity, a backslash). Another Moodle in a subfolder of the
+source's host is another site; the host is compared ignoring case, the path is not. The text is
+read as a browser reads it: entities decoded, line breaks and tabs dropped.
 
 This holds even for forms the plugin cannot read: IPv6 (`https://[2001:db8::1]/...`), a domain
 with an underscore, a long path, a double slash, a non-HTTP scheme. Failing to recognise an
@@ -315,11 +330,17 @@ needs PHP 7.1, and moodle-cs forbids `list()`. Use index access (`$a = $pair[0];
 - **A host split by hyphenation is not fixed.** Text pasted from a PDF arrives with the domain
   broken (`https:// site`, `exam- ple`, `site. org`). Since the space prevents reading the whole
   URL, the link is preserved rather than guessed.
-- **A URL with a literal space in the path** (`https://site/folder with space/mod/...`) is read
-  as a relative path, and the id may be remapped even though it belongs to another site. An
-  address with a space is malformed — the correct form is `%20`, which the plugin handles
-  normally. Closing this case would stop the plugin from fixing relative links preceded by text
-  containing `://`, which are more common.
+- **Relative links outside a link value are not rewritten** (see [DESIGN.md](DESIGN.md)):
+  `onclick`, inline `<script>`, running text, a file that mentions a base address, a path after a `/` in
+  the same run (`url(img/a.png)` or an inline image before `url(../mod/...)` in minified CSS,
+  `folder/index.php?next=../mod/...`), or a path with a backslash (`..\..\mod/...`).
+- **A source URL after an encoded character** (`login.php?a=1&amp;wantsurl=https://source/...`)
+  is left alone.
+- **Content crafted to fool the plugin is out of scope** (see the threat model in
+  [DESIGN.md](DESIGN.md)): the rewritten link would point to another site — an address its
+  author could have written directly.
+- **The guard protects the content, not the choice of links.** It refuses a file where anything
+  outside the links changed; it does not judge which links should have been rewritten.
 - **Relative** links to an activity not in the backup keep pointing to this site with a foreign
   id — there is no old host to preserve.
 - External files/aliases (`is_external_file()`) are ignored on purpose.

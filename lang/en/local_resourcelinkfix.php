@@ -24,6 +24,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+$string['cli_aborted'] = '{$a} file(s) skipped: the regex library aborted, and the plugin would skip them too.';
 $string['cli_covered'] = 'reached by the plugin';
 $string['cli_examples'] = 'examples:';
 $string['cli_examplesof'] = 'examples, {$a}:';
@@ -62,7 +63,7 @@ $string['cli_jswithlinks'] = 'of these, with an activity link';
 $string['cli_missing'] = '{$a} file(s) with no content in the filedir were skipped.
 This happens when the database came from another installation without its moodledata:
 the measurement then covers only part of the content.';
-$string['cli_otherhost'] = 'preserved: host of another site';
+$string['cli_otherhost'] = 'preserved: not safe to rewrite';
 $string['cli_otherscript'] = 'missed: script outside the pattern';
 $string['cli_relative'] = '(relative)';
 $string['cli_resourcescourse'] = 'Resources analysed (course {$a})';
