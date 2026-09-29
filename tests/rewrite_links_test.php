@@ -948,4 +948,84 @@ final class rewrite_links_test extends advanced_testcase {
             $this->assertSame($plugin->get_linkcount(), $reached, 'content: ' . substr($content, -80));
         }
     }
+    /**
+     * A colon and a space before a relative link are CSS or running text, not an address.
+     */
+    public function test_relative_link_after_colon_and_space_is_fixed() {
+        $plugin = $this->plugin();
+        $cases = [
+            'style block'    => '<style>.b { background: url(../mod/page/view.php?id=101); }</style>',
+            'inline style'   => '<div style="background-image: url(../mod/page/view.php?id=101)">x</div>',
+            'minified style' => '<style>.box{background: url(../mod/page/view.php?id=101)}</style>',
+            'running text'   => '<p>Atividade: mod/page/view.php?id=101</p>',
+        ];
+        foreach ($cases as $name => $content) {
+            $this->assertContains('view.php?id=201', $plugin->rewrite($content), 'should fix: ' . $name);
+        }
+    }
+
+    /**
+     * Line breaks and tabs belong to the address: browsers drop them.
+     *
+     * However many there are, and whatever comes between them, the address is
+     * read as one - a third site stays a third site.
+     */
+    public function test_line_breaks_are_part_of_the_address() {
+        $plugin = $this->plugin();
+        $cases = [
+            'two newlines'           => "<a href=\"https://terceiro.example.com/\nmoodle\n/mod/page/view.php?id=101\">x</a>",
+            'two tabs'               => "<a href=\"https://terceiro.example.com/\tlms\t/mod/page/view.php?id=101\">x</a>",
+            'source after a newline' => "<a href=\"https://terceiro.example.com\n"
+                . "//origem.example.org/mod/page/view.php?id=101\">x</a>",
+            'parameter after break'  => "<a href=\"https://terceiro.example.com/go?to=\n"
+                . "https://origem.example.org/mod/page/view.php?id=101\">x</a>",
+        ];
+        foreach ($cases as $name => $html) {
+            $this->assertSame($html, $plugin->rewrite($html), 'should preserve: ' . $name);
+        }
+    }
+
+    /**
+     * Forms that browsers turn into an absolute address are absolute.
+     *
+     * A single slash after the scheme and backslashes are normalised to
+     * 'https://' by browsers.
+     */
+    public function test_absolute_without_double_slash_is_preserved() {
+        $plugin = $this->plugin();
+        $cases = [
+            'single slash'    => '<a href="https:/10.0.0.5/mod/page/view.php?id=101">x</a>',
+            'backslashes'     => '<a href="https:\\\\terceiro.example.com\\moodle/mod/page/view.php?id=101">x</a>',
+            'slash-backslash' => '<a href="/\\10.0.0.5/mod/page/view.php?id=101">x</a>',
+            'source, backslashes' => '<a href="https:\\\\origem.example.org\\mod/page/view.php?id=101">x</a>',
+        ];
+        foreach ($cases as $name => $html) {
+            $this->assertSame($html, $plugin->rewrite($html), 'should preserve: ' . $name);
+        }
+        // A relative path with backslashes is still relative.
+        $this->assertSame(
+            '..\\..\\mod/page/view.php?id=201',
+            $plugin->rewrite('..\\..\\mod/page/view.php?id=101')
+        );
+    }
+
+    /**
+     * The measuring tool shows the link itself, and the host of the link's own URL.
+     */
+    public function test_reader_describes_links_for_the_measuring_tool() {
+        $reader = new \local_resourcelinkfix\link_reader(self::SOURCE);
+        $links = $reader->find('<style>.a{background:url(http://cdn.example.com/a.png)}' . str_repeat('.c{color:red}', 20)
+            . ".b{background:\nurl(../mod/page/view.php?id=101)}</style>"
+            . '<a href="' . self::SOURCE . '/mod/page/view.php?id=102">b</a> <a href="../mod/page/view.php?id=103">c</a>');
+
+        $this->assertFalse($links[0]['source']);
+        $excerpt = \local_resourcelinkfix\link_reader::excerpt($links[0], 60);
+        $this->assertLessThanOrEqual(60, strlen($excerpt));
+        $this->assertContains('mod/page/view.php?id=101', $excerpt);
+        $this->assertNotContains("\n", $excerpt);
+
+        $this->assertFalse(\local_resourcelinkfix\link_reader::host_of($links[0]));
+        $this->assertSame('https://origem.example.org', \local_resourcelinkfix\link_reader::host_of($links[1]));
+        $this->assertNull(\local_resourcelinkfix\link_reader::host_of($links[2]));
+    }
 }
