@@ -1028,4 +1028,45 @@ final class rewrite_links_test extends advanced_testcase {
         $this->assertSame('https://origem.example.org', \local_resourcelinkfix\link_reader::host_of($links[1]));
         $this->assertNull(\local_resourcelinkfix\link_reader::host_of($links[2]));
     }
+    /**
+     * Every form a browser reads as another site's address is left alone.
+     *
+     * The prefix and the piece before a space are read the same way: line
+     * breaks and tabs dropped, HTML entities decoded, backslashes as slashes.
+     * A scheme with no slash at all is absolute too: 'http:host' is read as
+     * 'http://host' on a page with another scheme.
+     */
+    public function test_browser_forms_of_another_site_are_preserved() {
+        $plugin = $this->plugin();
+        $cases = [
+            'scheme without slash'      => '<a href="http:10.0.0.5/mod/page/view.php?id=101">x</a>',
+            'https without slash'       => '<a href="https:10.0.0.5/mod/page/view.php?id=101">x</a>',
+            'single-label host'         => '<a href="http:moodle/mod/page/view.php?id=101">x</a>',
+            'space, newline, space'     => "<p>https://terceiro.example.com/moodle/ \n mod/page/view.php?id=101</p>",
+            'space, tab, space'         => "<p>https://terceiro.example.com/moodle/ \t mod/page/view.php?id=101</p>",
+            'space, newline, indent'    => "<p>Acesse terceiro.example.com/moodle/ \n    mod/page/view.php?id=101</p>",
+            'scheme, space, newline'    => "https:// \n 10.0.0.5/mod/page/view.php?id=101",
+            'space, CRLF, space'        => "<p>https://terceiro.example.com/moodle/ \r\n mod/page/view.php?id=101</p>",
+            'decimal entity slashes'    => '<a href="https:&#47;&#47;10.0.0.5/mod/page/view.php?id=101">x</a>',
+            'hex entity slashes'        => '<a href="https:&#x2F;&#x2F;10.0.0.5/mod/page/view.php?id=101">x</a>',
+            'named entity slashes'      => '<a href="&sol;&sol;10.0.0.5/mod/page/view.php?id=101">x</a>',
+            'word glued across a break' => "<p>Veja\nhttps:/10.0.0.5/mod/page/view.php?id=101</p>",
+            'backslashes before space'  => "<p>https:\\\\terceiro.example.com\\moodle\\ mod/page/view.php?id=101</p>",
+            'domain and colon'          => '<p>terceiro.example.com: 8080/mod/page/view.php?id=101</p>',
+        ];
+        foreach ($cases as $name => $content) {
+            $this->assertSame($content, $plugin->rewrite($content), 'should preserve: ' . $name);
+        }
+    }
+
+    /**
+     * Entities in a relative link's prefix do not stop it from being fixed.
+     */
+    public function test_entities_in_a_relative_prefix() {
+        $plugin = $this->plugin();
+        $this->assertSame(
+            '<a href="index.php?a=1&amp;next=../mod/page/view.php?id=201">x</a>',
+            $plugin->rewrite('<a href="index.php?a=1&amp;next=../mod/page/view.php?id=101">x</a>')
+        );
+    }
 }

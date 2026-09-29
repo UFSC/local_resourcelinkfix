@@ -153,6 +153,7 @@ $scripts = [];
 $hosts = [];
 $escaped = [];
 $withlinks = 0;
+$aborted = 0;
 
 foreach ($htmlfiles as $content) {
     $found = false;
@@ -160,7 +161,24 @@ foreach ($htmlfiles as $content) {
     // Links the plugin recognises, read exactly as the plugin reads them. The
     // plugin rewrites the whole file, not just attributes: a link in an inline
     // script, in onclick, in a CSS url() or in running text counts the same.
-    $reader->each_link($content, function ($link) use (&$found, &$scripts, &$hosts, &$stats, &$escaped, $maxexamples) {
+    // Counted on copies: if PCRE aborts halfway, the plugin skips the whole
+    // file, and so does the count.
+    $filestats = $stats;
+    $filescripts = $scripts;
+    $filehosts = $hosts;
+    $fileescaped = $escaped;
+    $ok = $reader->each_link($content, function ($link) use (
+        &$found,
+        &$filescripts,
+        &$filehosts,
+        &$filestats,
+        &$fileescaped,
+        $maxexamples
+    ) {
+        $scripts = &$filescripts;
+        $hosts = &$filehosts;
+        $stats = &$filestats;
+        $escaped = &$fileescaped;
         $found = true;
         $script = strtolower($link['path']) . '.php';
         $scripts[$script] = isset($scripts[$script]) ? $scripts[$script] + 1 : 1;
@@ -187,6 +205,14 @@ foreach ($htmlfiles as $content) {
             $escaped['otherhost'][] = \local_resourcelinkfix\link_reader::excerpt($link);
         }
     });
+    if (!$ok) {
+        $aborted++;
+        continue;
+    }
+    $stats = $filestats;
+    $scripts = $filescripts;
+    $hosts = $filehosts;
+    $escaped = $fileescaped;
 
     // Other links to Moodle scripts, which the plugin does not reach: the id is
     // not the first parameter, or the script is outside its pattern.
@@ -343,6 +369,10 @@ if ($withjs) {
 if ($missing) {
     echo "\n";
     cli_problem(get_string('cli_missing', 'local_resourcelinkfix', $missing));
+}
+if ($aborted) {
+    echo "\n";
+    cli_problem(get_string('cli_aborted', 'local_resourcelinkfix', $aborted));
 }
 
 echo "\n";

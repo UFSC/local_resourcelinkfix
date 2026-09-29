@@ -58,11 +58,13 @@ is not.
 The text glued before the path is read back to the start of the run (a space, a quote, an angle
 bracket) or to the previous link, whatever its length: every link in minified CSS or in an
 `onclick` is read. Line breaks and tabs do not end the run: browsers drop them from a URL, so an
-address split by them is still one address. Browsers also read `https:/host` and backslashes as
-`https://host`, and so does the plugin. When the text follows a space, the piece right before
-the space is checked too, because PDFs split addresses with spaces: if it looks like part of an
-address (`//`, a bare `http:` or `https:`, a domain such as `.org/`, or a trailing `/`, `.` or
-`-`), the link stays as it is. `background:` or `Activity:` before a space do not count.
+address split by them is still one address. Browsers also decode HTML entities (`&#47;`,
+`&sol;`) and read backslashes as slashes, and a scheme with one slash or none (`https:/host`,
+`http:host`) as an absolute address; so does the plugin. When the text follows spaces or line
+breaks, the piece right before them is checked too, read the same way, because PDFs split
+addresses with spaces: if it looks like part of an address (`//`, a bare `http:` or `https:`, a
+domain such as `.org/` or `.org:`, or a trailing `/`, `.` or `-`), the link stays as it is.
+`background:` or `Activity:` before a space do not count.
 
 This holds even for forms the plugin cannot read: IPv6 (`https://[2001:db8::1]/...`), a domain
 with an underscore, a long path, a double slash, a non-HTTP scheme. Failing to recognise an

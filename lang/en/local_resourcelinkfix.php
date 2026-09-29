@@ -24,6 +24,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+$string['cli_aborted'] = '{$a} file(s) skipped: the regex library aborted, and the plugin would skip them too.';
 $string['cli_covered'] = 'reached by the plugin';
 $string['cli_examples'] = 'examples:';
 $string['cli_examplesof'] = 'examples, {$a}:';
