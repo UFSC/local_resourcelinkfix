@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=afac4950df8d9dcee5b054fc05a46cfea1241bf44a092e1e4fecbe9c58179836 -->
+<!-- sync: README.md sha256=649697e624b190674e68867f488e7c9b2250a52d8caa9f8be07c583afebba25c -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -63,12 +63,14 @@ espaço, uma aspa, um sinal de maior ou menor) ou até o link anterior, qualquer
 que seja o tamanho: todo link de um CSS minificado ou de um `onclick` é lido.
 Quebras de linha e tabulações não encerram o trecho: o navegador as descarta da
 URL, então um endereço partido por elas continua sendo um endereço só. O
-navegador também lê `https:/host` e barras invertidas como `https://host`, e o
-plugin também. Quando o texto vem depois de um espaço, o pedaço logo antes do
-espaço também é conferido, porque o PDF parte endereços com espaços: se ele
-parece parte de um endereço (`//`, `http:` ou `https:` sozinhos, um domínio
-como `.org/`, ou `/`, `.` ou `-` no fim), o link fica como está. `background:`
-ou `Atividade:` antes do espaço não contam.
+navegador também decodifica entidades HTML (`&#47;`, `&sol;`), lê barras
+invertidas como barras, e lê esquema com uma barra ou nenhuma (`https:/host`,
+`http:host`) como endereço absoluto; o plugin também. Quando o texto vem depois
+de espaços ou quebras de linha, o pedaço logo antes deles também é conferido,
+lido do mesmo jeito, porque o PDF parte endereços com espaços: se ele parece
+parte de um endereço (`//`, `http:` ou `https:` sozinhos, um domínio como
+`.org/` ou `.org:`, ou `/`, `.` ou `-` no fim), o link fica como está.
+`background:` ou `Atividade:` antes do espaço não contam.
 
 Isso vale inclusive para formas que o plugin não sabe ler: IPv6
 (`https://[2001:db8::1]/...`), domínio com underscore, caminho longo, barra

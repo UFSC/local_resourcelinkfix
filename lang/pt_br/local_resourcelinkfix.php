@@ -24,6 +24,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+$string['cli_aborted'] = '{$a} arquivo(s) ignorado(s): a biblioteca de regex abortou, e o plugin também os ignoraria.';
 $string['cli_covered'] = 'alcançados pelo plugin';
 $string['cli_examples'] = 'exemplos:';
 $string['cli_examplesof'] = 'exemplos, {$a}:';
