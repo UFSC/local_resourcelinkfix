@@ -69,10 +69,11 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
      * Exposes rewrite_links() to the tests.
      *
      * @param string $content
+     * @param string $mode 'html', or 'js' for a .js file.
      * @return string
      */
-    public function rewrite($content) {
-        return $this->rewrite_links($content);
+    public function rewrite($content, $mode = 'html') {
+        return $this->rewrite_links($content, $mode);
     }
 
     /**
@@ -101,12 +102,25 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
      * Returns the content that would be written, or throws the same exception
      * rewrite_file() would.
      *
+     * A backtrack limit, when given, applies only while rewriting. Low enough
+     * to make the plugin's pattern abort, it also makes Moodle's own regular
+     * expressions fail - and building the exception calls get_string(), which
+     * validates the identifier with one.
+     *
      * @param string $old
+     * @param string|null $backtracklimit Value of pcre.backtrack_limit during the rewrite.
      * @return string|null Null when nothing would be written.
      * @throws moodle_exception When PCRE aborts.
      */
-    public function rewrite_file_for_test($old) {
+    public function rewrite_file_for_test($old, $backtracklimit = null) {
+        if ($backtracklimit !== null) {
+            $saved = ini_get('pcre.backtrack_limit');
+            ini_set('pcre.backtrack_limit', $backtracklimit);
+        }
         $new = $this->rewrite_links($old);
+        if ($backtracklimit !== null) {
+            ini_set('pcre.backtrack_limit', $saved);
+        }
 
         if ($new === null) {
             throw new moodle_exception(

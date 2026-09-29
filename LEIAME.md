@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=0adb26e300d0d3f79a728030de62b359b9568489fcb7c3f1aa3624cbcaec2340 -->
+<!-- sync: README.md sha256=285e654de60c365e36a00eb647c0915af67d444a52c82830715a92456bbd5a43 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -49,10 +49,28 @@ um cmid já reescrito não é remapeado.
 
 ### Na dúvida sobre a URL, não se toca
 
-O plugin não tenta adivinhar a forma de um endereço. Quando há indício de URL
-absoluta — `://`, `//` no início, credencial, ou um último segmento que pareça
-domínio — e a base não pode ser confirmada como a do site de origem, o link
-fica exatamente como está.
+**Link relativo só é reescrito onde começa um valor de link** — logo depois de
+`href=` ou `src=` (com ou sem aspas) ou de um `url(` de CSS; num arquivo `.js`,
+também um literal de string atribuído depois de `=` ou `:` (nunca depois de
+`+`, nem como argumento ou item de array). O caminho precisa ser simples, e
+arquivo que menciona um endereço base em qualquer lugar (`<base`, `&lt;base`,
+`createElement('base')`) não tem link relativo reescrito. Em qualquer outro lugar —
+`onclick`, `<script>` embutido, texto corrido — o link fica como está. O
+[DESIGN.md](DESIGN.md) registra o porquê: ler o texto antes de um caminho
+relativo para adivinhar se era endereço falhou em cinco rodadas de revisão,
+cada uma achando outra forma que o navegador lê como outro site. **Não
+reintroduzir**; amplie a lista de aberturas de valor.
+
+**Link absoluto** só é reescrito quando a base é exatamente o `wwwroot` do site
+de origem. Quando há indício de URL absoluta — `//`, esquema com uma barra ou
+nenhuma (`https:/host`, `http:host`), credencial — e a base não pode ser
+confirmada, o link fica exatamente como está. Também fica com duas URLs coladas
+(`url(a),url(b)` em CSS), com a URL levada no parâmetro de outra
+(`outro/r.php?u=origem/mod/...`), ou quando o que vem antes dela não é simples
+(barra, esquema, entidade, barra invertida). Outro Moodle numa subpasta do host
+de origem é outro site; o host é comparado sem diferenciar maiúsculas, o
+caminho não. O texto é lido como o navegador lê: entidades decodificadas,
+quebras de linha e tabulações descartadas.
 
 Isso vale inclusive para formas que o plugin não sabe ler: IPv6
 (`https://[2001:db8::1]/...`), domínio com underscore, caminho longo, barra
@@ -324,11 +342,20 @@ Atender ao Moodle 3.0 (PHP 5.6) e ao moodle-cs ao mesmo tempo impede a desestrut
 - **Host partido por hifenização não é corrigido.** Texto colado de PDF chega
   com o domínio quebrado (`https:// site`, `exam- ple`, `site. org`). Como o
   espaço impede ler a URL inteira, o link é preservado em vez de adivinhado.
-- **URL com espaço literal no caminho** (`https://site/pasta com espaco/mod/...`)
-  é lida como caminho relativo, e o id pode ser remapeado mesmo sendo de outro
-  site. Endereço com espaço é malformado — o correto é `%20`, que o plugin trata
-  normalmente. Fechar esse caso faria o plugin deixar de corrigir links
-  relativos precedidos de texto com `://`, que são mais comuns.
+- **Link relativo fora de um valor de link não é reescrito** (ver
+  [DESIGN.md](DESIGN.md)): `onclick`, `<script>` embutido, texto corrido,
+  arquivo que menciona endereço base, caminho depois de uma `/` no mesmo trecho
+  (`url(img/a.png)` ou imagem inline antes de `url(../mod/...)` em CSS
+  minificado, `pasta/index.php?next=../mod/...`), ou caminho com barra
+  invertida (`..\..\mod/...`).
+- **URL de origem depois de caractere codificado**
+  (`login.php?a=1&amp;wantsurl=https://origem/...`) fica como está.
+- **Conteúdo montado para enganar o plugin fica fora do escopo** (ver o
+  modelo de ameaça no [DESIGN.md](DESIGN.md)): o link reescrito apontaria para
+  outro site — um endereço que o autor poderia ter escrito direto.
+- **A trava protege o conteúdo, não a escolha dos links.** Ela recusa o
+  arquivo em que algo fora dos links mudou; não julga quais links deveriam ter
+  sido reescritos.
 - Links **relativos** para atividade que não veio no backup continuam
   apontando para este site com um id alheio — não há host antigo a preservar.
 - Arquivos externos/alias (`is_external_file()`) são ignorados de propósito.
