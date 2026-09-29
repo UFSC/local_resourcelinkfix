@@ -175,7 +175,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * HTML always. .js files only when the setting is on: .js is code, and a
      * mistake there breaks the resource's whole navigation, not one link.
      *
-     * @param string $filename
+     * @param string $filename Name of a file in the content area.
      * @return bool
      */
     protected function should_process_file($filename) {
@@ -219,132 +219,25 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * Does the prefix glued before the path indicate an absolute URL?
+     * The link reader for the current restore.
      *
-     * Three questions that do not depend on predicting the host's shape, and
-     * so let no new URL form slip through.
-     *
-     * @param string $prefix
-     * @return bool
+     * @param string $mode 'html', or 'js' for a .js file.
+     * @return \local_resourcelinkfix\link_reader
      */
-    protected function looks_absolute($prefix) {
-        if (strpos($prefix, '://') !== false) {
-            return true;
-        }
-        if (strpos($prefix, '//') === 0) {
-            return true;
-        }
-        if (strpos($prefix, '@') !== false) {
-            return true;
-        }
-        // The last segment looks like a domain ('ple.com/'). Covers the host
-        // split by hyphenation, where the '://' was left behind the space and
-        // did not enter the prefix. When in doubt, treat it as absolute: the
-        // cost of erring this way is only not fixing one link.
-        return (bool)preg_match('~\.[a-z]{2,}(?::\d+)?/?$~i', $prefix);
+    protected function reader($mode = \local_resourcelinkfix\link_reader::MODE_HTML) {
+        return new \local_resourcelinkfix\link_reader($this->oldwwwroot, $mode);
     }
 
     /**
-     * Reduces a prefix to a comparable form: no scheme, no hyphenation
-     * spaces, no credentials, no junk before the URL.
+     * How a file is read: as HTML, or as a .js file.
      *
-     * Comparing the whole BASE, not just the host, is what recognises a
-     * Moodle installed in a subfolder - where the wwwroot is 'site/moodle'.
-     *
-     * @param string $prefix
-     * @return string|null Null when there is no readable base.
+     * @param string $filename Name of a file in the content area.
+     * @return string 'html' or 'js'.
      */
-    protected function normalize_base($prefix) {
-        // Hyphenation in text pasted from a PDF: 'moo- dle', 'https:// site'.
-        $clean = preg_replace('/-[ \t]+/', '', $prefix);
-        $clean = preg_replace('/[ \t]+/', '', $clean);
-
-        // Cuts whatever comes before the URL: 'url(', 'href=', text.
-        $pos = strrpos($clean, '://');
-        if ($pos !== false) {
-            $start = $pos;
-            while ($start > 0 && preg_match('~[a-z0-9+.\-]~i', $clean[$start - 1])) {
-                $start--;
-            }
-            $clean = substr($clean, $start);
-        }
-
-        // Strips the scheme and the authority mark, if any.
-        $clean = preg_replace('~^[a-z][a-z0-9+.\-]*:~i', '', $clean);
-        $clean = preg_replace('~^//~', '', $clean);
-        // Credentials are not part of the site's identity.
-        $clean = preg_replace('~^[^/@]*@~', '', $clean);
-
-        return ($clean === '') ? null : $clean;
-    }
-
-    /**
-     * Does the prefix point to the site where the backup was made?
-     *
-     * The comparison is by string start, with the trailing slash included, so
-     * that 'origem.org.outro.com/' does not pass for 'origem.org/'.
-     *
-     * @param string $prefix
-     * @return bool
-     */
-    protected function is_origin_prefix($prefix) {
-        if ($this->oldwwwroot === '') {
-            return false;
-        }
-
-        // Without the authority mark in the prefix there is no telling the URL
-        // was read whole: a scheme may come before it, cut off by a
-        // hyphenation space. Claiming the source here would produce an address
-        // with two schemes glued together.
-        if (strpos(preg_replace('/[ \t]+/', '', $prefix), '//') === false) {
-            return false;
-        }
-
-        $base = $this->normalize_base($prefix);
-        $origin = $this->normalize_base($this->oldwwwroot . '/');
-        if ($base === null || $origin === null) {
-            return false;
-        }
-        return (strcasecmp(substr($base, 0, strlen($origin)), $origin) === 0);
-    }
-
-    /**
-     * Replaces the authority (scheme + host) inside the prefix, keeping what
-     * comes before it and the intermediate path.
-     *
-     * @param string $prefix
-     * @param string $target New wwwroot.
-     * @return string
-     */
-    protected function replace_authority($prefix, $target) {
-        // From the authority to the end of the prefix, tolerating hyphenation.
-        $pattern = '~(?:[a-z][a-z0-9+.\-]*:)?[ \t]*//.*$~i';
-        if (preg_match($pattern, $prefix)) {
-            return preg_replace($pattern, $target . '/', $prefix, 1);
-        }
-        // Split host with no '//' visible in the prefix: replaces the trailing
-        // part that looks like a domain.
-        return preg_replace('~[^\s/]*\.[a-z]{2,}(?::\d+)?/?$~i', $target . '/', $prefix, 1);
-    }
-
-    /**
-     * Is the host that of the site where the backup was made?
-     *
-     * A scheme-less URL inherits the page's scheme, so the comparison ignores
-     * the scheme on both sides in that case.
-     *
-     * @param string $host
-     * @return bool
-     */
-    protected function is_origin_host($host) {
-        if ($this->oldwwwroot === '') {
-            return false;
-        }
-        $origin = $this->oldwwwroot;
-        if (strpos($host, '//') === 0) {
-            $origin = preg_replace('~^https?:~i', '', $origin);
-        }
-        return (strcasecmp($host, $origin) === 0);
+    protected function mode_of($filename) {
+        return preg_match('/\.js$/i', $filename)
+            ? \local_resourcelinkfix\link_reader::MODE_JS
+            : \local_resourcelinkfix\link_reader::MODE_HTML;
     }
 
     /**
@@ -359,16 +252,15 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * a pattern that matches more than it should overwrites teaching material
      * without a trace, and the original is already gone.
      *
-     * @param string $old
-     * @param string $new
+     * @param string $old Content before the rewrite.
+     * @param string $new Content after the rewrite.
+     * @param string $mode 'html', or 'js' for a .js file.
      * @return bool False also when the check could not be made.
      */
-    protected function only_links_changed($old, $new) {
-        $marker = "\x00" . 'RLFLINK' . "\x00";
-        $pattern = self::get_link_pattern();
-
-        $maskedold = preg_replace($pattern, $marker, $old);
-        $maskednew = preg_replace($pattern, $marker, $new);
+    protected function only_links_changed($old, $new, $mode = \local_resourcelinkfix\link_reader::MODE_HTML) {
+        $rootpattern = $this->root_pattern();
+        $maskedold = $this->mask_links($old, $rootpattern, $mode);
+        $maskednew = $this->mask_links($new, $rootpattern, $mode);
 
         // Without a reliable mask there is no check: say no, to be safe.
         if ($maskedold === null || $maskednew === null) {
@@ -378,14 +270,66 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
+     * The pattern of the source's or this site's wwwroot at the end of a prefix.
+     *
+     * @return string|null Null when neither is known.
+     */
+    protected function root_pattern() {
+        $roots = [];
+        foreach ([$this->oldwwwroot, $this->newwwwroot] as $root) {
+            $root = \local_resourcelinkfix\link_reader::strip_scheme(rtrim($root, '/'));
+            if ($root !== '') {
+                $roots[] = $root;
+            }
+        }
+        // Longest first: one wwwroot may extend the other ('site' and 'site/moodle').
+        usort($roots, function ($a, $b) {
+            return strlen($b) - strlen($a);
+        });
+        $quoted = array_map(function ($root) {
+            return preg_quote($root, '~');
+        }, $roots);
+        return $quoted ? '~(?:https?:)?//(?:' . implode('|', $quoted) . ')/$~i' : null;
+    }
+
+    /**
+     * The content with each link's path and id replaced by a marker.
+     *
+     * The prefix stays, so text lost there is seen. When it holds a single
+     * URL ending in the source's or this site's wwwroot, that wwwroot becomes
+     * one token: the rewrite may swap one for the other there, and nothing else.
+     *
+     * The guard protects the content, not the choice of links: an id changed
+     * in a link the plugin should have left alone is not its business.
+     *
+     * @param string $content The content to mask.
+     * @param string|null $rootpattern From root_pattern().
+     * @param string $mode 'html', or 'js' for a .js file.
+     * @return string|null Null when PCRE aborts.
+     */
+    protected function mask_links($content, $rootpattern, $mode) {
+        $masked = '';
+        $pos = 0;
+        $ok = $this->reader($mode)->each_link($content, function ($link) use ($content, $rootpattern, &$masked, &$pos) {
+            $prefix = $link['prefix'];
+            if ($rootpattern !== null && substr_count($prefix, '//') === 1) {
+                $prefix = preg_replace($rootpattern, "\x00RLFROOT\x00", $prefix);
+            }
+            $masked .= substr($content, $pos, $link['start'] - $pos) . $prefix . "\x00RLFLINK\x00";
+            $pos = $link['end'];
+        });
+        return $ok ? $masked . substr($content, $pos) : null;
+    }
+
+    /**
      * Writes content to the restore log, in chunks.
      *
      * The restore logger was not built for long text, so the output goes out
      * sliced and labelled. The goal is to allow rebuilding what would have
      * been lost, not to produce a readable diff.
      *
-     * @param string $label
-     * @param string $content
+     * @param string $label Label for each line, such as BEFORE or AFTER.
+     * @param string $content Content to log.
      */
     protected function log_content($label, $content) {
         // Deliberate cap. At LOG_ERROR the restore logger chain goes through
@@ -428,7 +372,8 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     protected function rewrite_file($fs, $file) {
         $old = $file->get_content();
         $this->linkcount = 0;
-        $new = $this->rewrite_links($old);
+        $mode = $this->mode_of($file->get_filename());
+        $new = $this->rewrite_links($old, $mode);
 
         // A preg_replace_callback() call returns null when PCRE aborts, without
         // throwing. Treating that as "new content" would write an empty file
@@ -450,7 +395,7 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         // Guard: nothing but the links may have changed. If something did, the
         // file stays as it is and both contents go to the log, so what would be
         // lost can be seen.
-        if (!$this->only_links_changed($old, $new)) {
+        if (!$this->only_links_changed($old, $new, $mode)) {
             $this->task->get_logger()->process(
                 get_string('errorcontentlost', 'local_resourcelinkfix', (object)[
                     'file' => $file->get_filepath() . $file->get_filename(),
@@ -516,31 +461,18 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * The pattern that recognises an activity or course link.
+     * The pattern that recognises the path and the id of an activity or course link.
      *
-     * Public because the measuring tool (cli/measure_links.php) must use
-     * exactly the same pattern: if the two diverge, the report measures
-     * something other than what the plugin does.
+     * Public because the measuring tool (cli/measure_links.php) relies on the
+     * same recognition. The prefix glued before the path is not in the
+     * pattern: \local_resourcelinkfix\link_reader reads it.
      *
-     * Groups: 1 prefix glued before the path (up to 300 characters, no
-     * whitespace, quotes or angle brackets; may be empty), 2 path up to
-     * '?id=', 3 path, 4 script, 5 id.
+     * Groups: 1 path up to '?id=', 2 path, 3 script, 4 id.
      *
      * @return string
      */
     public static function get_link_pattern() {
-        // Captures whatever is GLUED before the path, without trying to guess
-        // the host's shape. The callback decides: if the prefix hints at an
-        // absolute URL and the host cannot be confirmed as the source's,
-        // nothing changes.
-        //
-        // Recognising the host by regex was what failed: every unforeseen
-        // form - IPv6, underscore, long path, double slash - was read as a
-        // relative path and had its id remapped, pointing to another Moodle
-        // with an id from here. The limit of 300 prevents backtracking on a
-        // long run without spaces.
-        return '~([^\s"\'<>]{0,300})(?<![a-z0-9_])' .
-               '((mod/[a-z0-9_]+/(view|index|complete)|course/view)\.php\?id=)(\d+)(?!\d)~i';
+        return \local_resourcelinkfix\link_reader::get_pattern();
     }
 
     /**
@@ -551,6 +483,29 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * course/view.php?id=COURSE become the new course. Absolute or relative
      * links. Unmapped ids stay untouched.
      *
+     * @param string $content Content of a file.
+     * @param string $mode 'html', or 'js' for a .js file.
+     * @return string|null Null when PCRE aborts.
+     */
+    protected function rewrite_links($content, $mode = \local_resourcelinkfix\link_reader::MODE_HTML) {
+        $output = '';
+        $pos = 0;
+        $ok = $this->reader($mode)->each_link($content, function ($link) use ($content, &$output, &$pos) {
+            $original = substr($content, $link['start'], $link['end'] - $link['start']);
+            $output .= substr($content, $pos, $link['start'] - $pos) . $this->rewrite_link($link, $original);
+            $pos = $link['end'];
+        });
+        return $ok ? $output . substr($content, $pos) : null;
+    }
+
+    /**
+     * Rewrites one link found by the reader.
+     *
+     * When in doubt, leave it alone. If there is a hint of an absolute URL and
+     * the host cannot be confirmed as the source's, the link stays as it is. A
+     * stale link is better than one that points to another Moodle with an id
+     * from here and silently opens the wrong activity.
+     *
      * In a backup from another site, the old wwwroot of an absolute link is
      * replaced with this site's, but only when the id was also remapped. If
      * the activity was not in the backup, the id is still the other site's:
@@ -558,46 +513,30 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * open another activity. Keeping the old host, the link stays valid on the
      * source site.
      *
-     * @param string $content
+     * @param array $link A link, as \local_resourcelinkfix\link_reader::each_link() describes it.
+     * @param string $original The link as it is in the content, prefix included.
      * @return string
      */
-    protected function rewrite_links($content) {
-        $pattern = self::get_link_pattern();
-        // From here on the pattern is the same one only_links_changed() uses.
+    protected function rewrite_link($link, $original) {
+        if ($link['source'] === false) {
+            return $original;
+        }
+        $new = $this->map_id($link['path'], $link['script'], $link['id']);
+        if ($new === $link['id']) {
+            return $original;
+        }
 
-        return preg_replace_callback($pattern, function ($m) {
-            $prefix = $m[1];
-
-            // When in doubt, leave it alone. If there is a hint of an absolute
-            // URL and the host cannot be confirmed as the source's, the link
-            // stays as it is. A stale link is better than one that points to
-            // another Moodle with an id from here and silently opens the wrong
-            // activity.
-            if ($this->looks_absolute($prefix) && !$this->is_origin_prefix($prefix)) {
-                return $m[0];
-            }
-
-            $id = (int)$m[5];
-            $new = $this->map_id($m[3], $m[4], $id);
-
-            $output = $prefix . $m[2] . $new;
-            if ($new !== $id && $this->looks_absolute($prefix)) {
-                // Source host, remapped id: the authority becomes this site's
-                // too. Only it is replaced - whatever comes before it in the
-                // prefix ('url(', for example) is kept.
-                $target = $this->newwwwroot;
-                if (preg_match('~^[ \t]*//~', $prefix)) {
-                    // No scheme: the form is kept, it inherits the page's.
-                    $target = preg_replace('~^https?:~i', '', $target);
-                }
-                $output = $this->replace_authority($prefix, $target) . $m[2] . $new;
-            }
-
-            if ($output !== $m[0]) {
-                $this->linkcount++;
-            }
-            return $output;
-        }, $content);
+        $output = $link['prefix'] . $link['pathid'] . $new;
+        if ($link['source'] !== null) {
+            // Only the URL is replaced - its lead ('url(', for example) is
+            // kept. Without a scheme the form is kept too: it inherits the page's.
+            $target = $link['source'][1]
+                ? $this->newwwwroot
+                : '//' . \local_resourcelinkfix\link_reader::strip_scheme($this->newwwwroot);
+            $output = $link['source'][0] . $target . '/' . $link['pathid'] . $new;
+        }
+        $this->linkcount++;
+        return $output;
     }
 
     /**

@@ -83,11 +83,13 @@ final class pcre_limits_test extends advanced_testcase {
      * With PCRE really aborting, the rewrite returns null.
      *
      * This test pins the threshold: the value used must make PCRE abort,
-     * or the next test passes by mistake. Measured in this environment: with
-     * backtrack_limit=100 the pattern still completes; from 30 down it aborts.
+     * or the next test passes by mistake. The pattern only matches the path
+     * and the id, and backtracks very little: measured on PHP 5.6, 7.2 and
+     * 8.3, with and without the JIT, it completes with backtrack_limit=2 and
+     * aborts with 1.
      */
     public function test_chosen_limit_really_aborts_pcre(): void {
-        ini_set('pcre.backtrack_limit', '10');
+        ini_set('pcre.backtrack_limit', '1');
 
         $plugin = $this->plugin();
         $result = $plugin->rewrite($this->heavy_content());
@@ -104,13 +106,12 @@ final class pcre_limits_test extends advanced_testcase {
      */
     public function test_rewrite_file_refuses_when_pcre_aborts(): void {
         $this->resetAfterTest(true);
-        ini_set('pcre.backtrack_limit', '10');
 
         $plugin = $this->plugin();
         // Neither setExpectedException() (removed in PHPUnit 6) nor expectException() (only from 5.2):
         // try/catch runs from Moodle 3.0 (PHPUnit 4.8) to 3.8 (PHPUnit 7.5).
         try {
-            $plugin->rewrite_file_for_test($this->heavy_content());
+            $plugin->rewrite_file_for_test($this->heavy_content(), '1');
             $this->fail('rewrite_file() wrote with PCRE aborted; it should throw moodle_exception');
         } catch (moodle_exception $e) {
             $this->assertInstanceOf('moodle_exception', $e);
@@ -121,7 +122,7 @@ final class pcre_limits_test extends advanced_testcase {
      * With PCRE aborted, the guard says no: without a mask there is no check.
      */
     public function test_guard_says_no_when_it_cannot_check(): void {
-        ini_set('pcre.backtrack_limit', '10');
+        ini_set('pcre.backtrack_limit', '1');
 
         $plugin = $this->plugin();
         $heavy = $this->heavy_content();
@@ -167,6 +168,87 @@ final class pcre_limits_test extends advanced_testcase {
             $elapsed,
             'the rewrite took ' . round($elapsed, 2) . ' s: a sign of backtracking'
         );
+    }
+
+    /**
+     * A run of megabytes without spaces stays linear.
+     *
+     * The unanchored prefix tried up to 300 characters from every position of
+     * the run: 2.3 s for 4 MB with the JIT, 22.6 s without it, and the file
+     * goes through the pattern three times. Now only the start of a run is
+     * tried.
+     */
+    public function test_megabyte_run_without_spaces_stays_linear(): void {
+        $plugin = $this->plugin();
+        $content = '<img src="data:image/png;base64,' . str_repeat('QUJD', 1024 * 1024) . '">'
+            . '<a href="../../mod/page/view.php?id=101">link</a>';
+
+        $start = microtime(true);
+        $result = $plugin->rewrite($content);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertStringContainsString('view.php?id=201', $result);
+        $this->assertLessThan(
+            0.5,
+            $elapsed,
+            'the rewrite took ' . round($elapsed, 2) . ' s for 4 MB: a sign of backtracking'
+        );
+    }
+
+    /**
+     * A link at the end of a megabyte run is read, and quickly.
+     *
+     * With a plain lead, however long, the link is fixed. After an inline
+     * image ('data:image/png;...'), the slash in the lead means the path may
+     * continue something else, and the link is left alone - also quickly.
+     */
+    public function test_link_at_the_end_of_a_megabyte_run(): void {
+        $plugin = $this->plugin();
+        $run = str_repeat('QUJD', 1024 * 1024);
+        $cases = [
+            'plain lead' => ['<style>.x{background:url(' . $run . '),url(../mod/page/view.php?id=101)}</style>', true],
+            'inline image' => [
+                '<style>.x{background:url(data:image/png;base64,' . $run . '),url(../mod/page/view.php?id=101)}</style>',
+                false,
+            ],
+        ];
+        foreach ($cases as $name => $case) {
+            $start = microtime(true);
+            $result = $plugin->rewrite($case[0]);
+            $elapsed = microtime(true) - $start;
+
+            $expected = $case[1] ? 'view.php?id=201' : 'view.php?id=101';
+            $this->assertStringContainsString($expected, substr($result, -60), $name);
+            $this->assertLessThan(0.5, $elapsed, $name . ': the rewrite took ' . round($elapsed, 2) . ' s');
+        }
+    }
+
+    /**
+     * Memory does not grow with the number of links.
+     *
+     * Collecting every match with its offsets, plus an array per link, took
+     * over 50 MB for 100,000 links in 4 MB of HTML; running out of memory is a
+     * fatal error that no catch stops, and it brings the whole restore down.
+     * Links are now read one at a time. The check runs in a separate process
+     * with a low memory_limit: within PHPUnit the peak already carries the
+     * previous tests, and it cannot be reset before PHP 8.2.
+     */
+    public function test_memory_does_not_grow_with_the_number_of_links(): void {
+        global $CFG;
+
+        $code = 'define("MOODLE_INTERNAL", 1);'
+            . 'require ' . var_export($CFG->dirroot . '/local/resourcelinkfix/classes/link_reader.php', true) . ';'
+            . '$c = str_repeat(\'<a href="../mod/page/view.php?id=101">x</a>\', 100000);'
+            . '$r = new local_resourcelinkfix\link_reader("https://origem.example.org");'
+            . '$n = 0;'
+            . '$ok = $r->each_link($c, function ($link) use (&$n) { $n++; });'
+            . 'echo $ok ? $n : "abort";';
+        $output = [];
+        $status = null;
+        exec(escapeshellarg(PHP_BINARY) . ' -d memory_limit=48M -r ' . escapeshellarg($code) . ' 2>&1', $output, $status);
+
+        $this->assertSame(0, $status, implode("\n", $output));
+        $this->assertSame('100000', trim(implode('', $output)));
     }
 
     /**
