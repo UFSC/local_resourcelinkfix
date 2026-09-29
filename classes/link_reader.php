@@ -23,7 +23,6 @@
  */
 
 namespace local_resourcelinkfix;
-
 /**
  * Finds links and reads the text glued before each one.
  *
@@ -36,16 +35,22 @@ namespace local_resourcelinkfix;
  * end of the previous link): that is the prefix, and it decides whether the
  * link is relative, from the source site, or to be left alone.
  *
+ * Line breaks and tabs do not end a run: browsers drop them from a URL, so an
+ * address split by them is still one address.
+ *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class link_reader {
-    /** Characters that end a run: whitespace, quotes and angle brackets. */
-    const DELIMITERS = " \t\n\r\f\v\"'<>";
+    /** Characters that end a run: spaces, quotes and angle brackets. */
+    const DELIMITERS = " \f\v\"'<>";
 
-    /** Whitespace, the only delimiter a URL can be split by. */
-    const WHITESPACE = " \t\n\r\f\v";
+    /** Spaces: they end a run, and text pasted from a PDF splits addresses with them. */
+    const SPACES = " \f\v";
+
+    /** Characters browsers drop from inside a URL. */
+    const DROPPED = "\t\n\r";
 
     /** @var string Source wwwroot without its scheme ('site/moodle'); empty when unknown. */
     protected $source;
@@ -73,7 +78,7 @@ class link_reader {
     /**
      * A wwwroot without its scheme and authority mark: 'site/moodle'.
      *
-     * @param string $wwwroot
+     * @param string $wwwroot A wwwroot, with or without a scheme.
      * @return string
      */
     public static function strip_scheme($wwwroot) {
@@ -81,32 +86,39 @@ class link_reader {
     }
 
     /**
-     * Finds the links in the content.
+     * Visits the links in the content, one at a time.
      *
      * Each link is an array with: 'start' and 'end' (offsets of prefix start
      * and link end), 'prefix', 'pathid' (path up to '?id='), 'path', 'script',
      * 'id', and 'source': null for a relative link, false to leave it alone,
      * or [lead, whether the URL has a scheme] for the source site.
      *
-     * @param string $content
-     * @return array|null Null when PCRE aborts.
+     * One link at a time, and none kept: memory follows the size of the
+     * content, not the number of links. Each search starts where the previous
+     * link ended, so the content is read once.
+     *
+     * @param string $content The content to read.
+     * @param callable $visit Called with each link, in order.
+     * @return bool False when PCRE aborts.
      */
-    public function find($content) {
-        $count = preg_match_all(self::get_pattern(), $content, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
-        if ($count === false) {
-            return null;
-        }
-        $links = [];
-        $low = 0;
-        foreach ($matches as $m) {
+    public function each_link($content, $visit) {
+        $pattern = self::get_pattern();
+        $offset = 0;
+        while (true) {
+            $found = preg_match($pattern, $content, $m, PREG_OFFSET_CAPTURE, $offset);
+            if ($found === false) {
+                return false;
+            }
+            if ($found === 0) {
+                return true;
+            }
             $pathstart = $m[0][1];
-            $before = substr($content, $low, $pathstart - $low);
-            $prefixlength = strcspn(strrev($before), self::DELIMITERS);
+            $reversed = strrev((string)substr($content, $offset, $pathstart - $offset));
+            $prefixlength = strcspn($reversed, self::DELIMITERS);
             $start = $pathstart - $prefixlength;
-            $prefix = (string)substr($content, $start, $prefixlength);
-            $token = $this->token_before((string)substr($content, $low, $start - $low));
             $end = $pathstart + strlen($m[0][0]);
-            $links[] = [
+            $prefix = (string)substr($content, $start, $prefixlength);
+            $visit([
                 'start' => $start,
                 'end' => $end,
                 'prefix' => $prefix,
@@ -114,30 +126,44 @@ class link_reader {
                 'path' => $m[2][0],
                 'script' => $m[3][0],
                 'id' => (int)$m[4][0],
-                'source' => $this->read_prefix($prefix, $token),
-            ];
-            $low = $end;
+                'source' => $this->read_prefix($prefix, $this->token_before($reversed, $prefixlength)),
+            ]);
+            $offset = $end;
         }
-        return $links;
     }
 
     /**
-     * The run glued before the whitespace that precedes a prefix.
+     * All the links in the content, for short content and tests.
      *
-     * Browsers drop line breaks and tabs from a URL, and text pasted from a
-     * PDF splits addresses with spaces. When the prefix follows whitespace,
-     * the piece right before it may be the start of the same address.
-     *
-     * @param string $text Text between the previous link (or the start) and the prefix.
-     * @return string Empty when the prefix does not follow whitespace.
+     * @param string $content The content to read.
+     * @return array|null The links, as each_link() describes them; null when PCRE aborts.
      */
-    protected function token_before($text) {
-        if ($text === '' || strpos(self::WHITESPACE, substr($text, -1)) === false) {
+    public function find($content) {
+        $links = [];
+        $ok = $this->each_link($content, function ($link) use (&$links) {
+            $links[] = $link;
+        });
+        return $ok ? $links : null;
+    }
+
+    /**
+     * The run glued before the spaces that precede a prefix.
+     *
+     * Text pasted from a PDF splits addresses with spaces. When the prefix
+     * follows a space, the piece right before it may be the start of the same
+     * address.
+     *
+     * @param string $reversed Text between the previous link (or the start) and the path, reversed.
+     * @param int $prefixlength Length of the prefix at the start of $reversed.
+     * @return string Empty when the prefix does not follow a space.
+     */
+    protected function token_before($reversed, $prefixlength) {
+        if ($prefixlength >= strlen($reversed) || strpos(self::SPACES, $reversed[$prefixlength]) === false) {
             return '';
         }
-        $text = rtrim($text, self::WHITESPACE);
-        $length = strcspn(strrev($text), self::DELIMITERS);
-        return $length ? substr($text, -$length) : '';
+        $tokenstart = $prefixlength + strspn($reversed, self::SPACES, $prefixlength);
+        $tokenlength = strcspn($reversed, self::DELIMITERS, $tokenstart);
+        return strrev((string)substr($reversed, $tokenstart, $tokenlength));
     }
 
     /**
@@ -150,23 +176,29 @@ class link_reader {
      * - more than one '//': two URLs glued together, or one URL carried in
      *   another's parameter, and there is no telling which the path belongs to;
      * - a scheme other than http or https, or credentials;
-     * - a segment that looks like a domain, or whitespace right after a piece
-     *   that looks like part of an address: a URL split by hyphenation or by
-     *   a line break, whose start is out of the prefix;
+     * - a segment that looks like a domain, a scheme with a single slash, or a
+     *   space right after a piece that looks like part of an address: a URL
+     *   whose start is out of the prefix;
      * - an absolute URL whose base is not exactly the source's wwwroot.
      *
-     * @param string $prefix
-     * @param string $token The piece before the whitespace that precedes the prefix, if any.
+     * Browsers drop line breaks and tabs from a URL and read backslashes as
+     * slashes, so the prefix is read that way. A prefix that holds them is
+     * only trusted as a relative path: rewriting it as the source's would have
+     * to decide what to do with them.
+     *
+     * @param string $prefix The text glued before the path.
+     * @param string $token The piece before the spaces that precede the prefix, if any.
      * @return array|false|null Null for a relative path; false to leave the
      *                          link alone; for the source site, [lead, whether
      *                          the URL has a scheme].
      */
     public function read_prefix($prefix, $token = '') {
-        $marks = substr_count($prefix, '//');
+        $clean = strtr(str_replace(str_split(self::DROPPED), '', $prefix), '\\', '/');
+        $marks = substr_count($clean, '//');
         if ($marks === 0) {
-            return $this->read_relative_prefix($prefix, $token);
+            return $this->read_relative_prefix($clean, $token);
         }
-        if ($marks > 1) {
+        if ($marks > 1 || $clean !== $prefix) {
             return false;
         }
         return $this->read_absolute_prefix($prefix);
@@ -175,13 +207,17 @@ class link_reader {
     /**
      * Reads a prefix without an authority mark.
      *
-     * @param string $prefix
-     * @param string $token
+     * @param string $prefix The prefix, without line breaks or tabs, with slashes for backslashes.
+     * @param string $token The piece before the spaces that precede the prefix, if any.
      * @return false|null Null for a relative path; false when it may be part
      *                    of an address whose start is out of sight.
      */
     protected function read_relative_prefix($prefix, $token) {
         if ($this->looks_like_address_piece($token)) {
+            return false;
+        }
+        // A scheme with a single slash: browsers read 'https:/host' as 'https://host'.
+        if (preg_match('~(?<![a-z0-9+.\-])https?:/~i', $prefix)) {
             return false;
         }
         // Credentials: an '@' followed by a host. An '@' elsewhere ('@media'
@@ -198,28 +234,30 @@ class link_reader {
     }
 
     /**
-     * Does the piece before a whitespace look like part of an address?
+     * Does the piece before a space look like part of an address?
      *
-     * Running text ('see', 'then') does not. An authority mark, a dot
-     * followed by letters, or a trailing '/', ':', '.' or '-' does.
+     * Running text ('see', 'Activity:') and CSS ('background:') do not. An
+     * authority mark, a bare 'http:' or 'https:', a domain ('.org/'), or a
+     * trailing '/', '.' or '-' do.
      *
-     * @param string $token
+     * @param string $token The piece before the spaces.
      * @return bool
      */
     protected function looks_like_address_piece($token) {
+        $token = str_replace(str_split(self::DROPPED), '', $token);
         if ($token === '') {
             return false;
         }
-        if (strpos($token, '//') !== false || strpos($token, '@') !== false) {
+        if (strpos($token, '//') !== false || preg_match('~^https?:$~i', $token)) {
             return true;
         }
-        return (bool)preg_match('~\.[a-z]|[/:.\-]$~i', $token);
+        return (bool)preg_match('~\.[a-z]{2,}(?::\d+)?(?:/|$)|[/.\-]$~i', $token);
     }
 
     /**
      * Reads a prefix with a single authority mark.
      *
-     * @param string $prefix
+     * @param string $prefix The prefix.
      * @return array|false For the source site, [lead, whether the URL has a
      *                     scheme]; false otherwise.
      */
@@ -260,7 +298,7 @@ class link_reader {
     /**
      * Where the URL starts: at its scheme, or at the '//' when it has none.
      *
-     * @param string $prefix
+     * @param string $prefix The prefix.
      * @param int $pos Position of the '//'.
      * @return int|false False for a scheme other than http or https.
      */
@@ -276,5 +314,40 @@ class link_reader {
             return false;
         }
         return $start;
+    }
+
+    /**
+     * The end of a link as found, on one line, for a report.
+     *
+     * The prefix may be megabytes long - it runs back to the start of the run
+     * - so the excerpt keeps its end, where the link is.
+     *
+     * @param array $link A link, as each_link() describes it.
+     * @param int $length Maximum length of the excerpt.
+     * @return string
+     */
+    public static function excerpt($link, $length = 110) {
+        $tail = substr($link['prefix'], -2 * $length) . $link['pathid'] . $link['id'];
+        $tail = preg_replace('~\s+~', ' ', $tail);
+        if (strlen($tail) <= $length) {
+            return $tail;
+        }
+        return '...' . substr($tail, -($length - 3));
+    }
+
+    /**
+     * The host of a link's own URL, for a report.
+     *
+     * @param array $link A link, as each_link() describes it.
+     * @return string|false|null Scheme and host for the source site; null for
+     *                           a relative link; false for a link left alone,
+     *                           whose host is not known for sure.
+     */
+    public static function host_of($link) {
+        if (!is_array($link['source'])) {
+            return $link['source'];
+        }
+        $url = substr($link['prefix'], strlen($link['source'][0]));
+        return preg_match('~^((?:[a-z][a-z0-9+.\-]*:)?//[^/]+)~i', $url, $m) ? strtolower($m[1]) : false;
     }
 }
