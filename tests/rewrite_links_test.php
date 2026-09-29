@@ -1036,7 +1036,7 @@ final class rewrite_links_test extends advanced_testcase {
      * A scheme with no slash at all is absolute too: 'http:host' is read as
      * 'http://host' on a page with another scheme.
      */
-    public function test_browser_forms_of_another_site_are_preserved() {
+    public function test_browser_forms_of_another_site_are_preserved(): void {
         $plugin = $this->plugin();
         $cases = [
             'scheme without slash'      => '<a href="http:10.0.0.5/mod/page/view.php?id=101">x</a>',
@@ -1062,7 +1062,7 @@ final class rewrite_links_test extends advanced_testcase {
     /**
      * Entities in a relative link's prefix do not stop it from being fixed.
      */
-    public function test_entities_in_a_relative_prefix() {
+    public function test_entities_in_a_relative_prefix(): void {
         $plugin = $this->plugin();
         $this->assertSame(
             '<a href="index.php?a=1&amp;next=../mod/page/view.php?id=201">x</a>',
