@@ -1002,9 +1002,10 @@ final class rewrite_links_test extends advanced_testcase {
         foreach ($cases as $name => $html) {
             $this->assertSame($html, $plugin->rewrite($html), 'should preserve: ' . $name);
         }
-        // A relative path with backslashes is still relative.
+        // A backslash may be a path separator or an escape ('\\x2f' in JS,
+        // '\\00002f' in CSS): any backslash leaves the link alone.
         $this->assertSame(
-            '..\\..\\mod/page/view.php?id=201',
+            '..\\..\\mod/page/view.php?id=101',
             $plugin->rewrite('..\\..\\mod/page/view.php?id=101')
         );
     }
@@ -1068,5 +1069,56 @@ final class rewrite_links_test extends advanced_testcase {
             '<a href="index.php?a=1&amp;next=../mod/page/view.php?id=201">x</a>',
             $plugin->rewrite('<a href="index.php?a=1&amp;next=../mod/page/view.php?id=101">x</a>')
         );
+    }
+    /**
+     * Encoded and escaped forms of another site's address are left alone.
+     *
+     * A relative link is only accepted when its prefix is a plain path after a
+     * plain lead: anything else - entities, escapes, a scheme - is doubt.
+     */
+    public function test_encoded_and_escaped_forms_are_preserved() {
+        $plugin = $this->plugin();
+        $path = 'mod/page/view.php?id=101';
+        $cases = [
+            'tab entity between slashes'      => '<a href="/&Tab;/10.0.0.5/' . $path . '">x</a>',
+            'newline entity between slashes'  => '<a href="/&#10;/10.0.0.5/' . $path . '">x</a>',
+            'hex tab entity, single label'    => '<a href="/&#x9;/moodle/' . $path . '">x</a>',
+            'named newline entity, port'      => '<a href="/&NewLine;/moodle:8080/' . $path . '">x</a>',
+            'decimal reference, no semicolon' => '<a href="&#47&#47;10.0.0.5/' . $path . '">x</a>',
+            'hex reference, no semicolon'     => '<a href="&#x2f&#x2f10.0.0.5/' . $path . '">x</a>',
+            'CSS escape'                      => '<style>.a{background:url("\\00002f\\00002f10.0.0.5/' . $path . '")}</style>',
+            'JS escape'                       => '<script>location.href="\\x2f\\x2f10.0.0.5/' . $path . '";</script>',
+            'single slash, source inside'     => '<a href="https:/10.0.0.5/r?u=' . self::SOURCE . '/' . $path . '">x</a>',
+            'no slash, source inside'         => '<a href="http:10.0.0.5/r?u=' . self::SOURCE . '/' . $path . '">x</a>',
+        ];
+        foreach ($cases as $name => $content) {
+            $this->assertSame($content, $plugin->rewrite($content), 'should preserve: ' . $name);
+        }
+    }
+
+    /**
+     * What comes before a relative path must be plain for the link to be fixed.
+     *
+     * A slash there means the path may continue something else - a folder, an
+     * address, a parameter - and the link is left alone.
+     */
+    public function test_lead_before_a_relative_path() {
+        $plugin = $this->plugin();
+        $fixed = [
+            'CSS lead'       => '<style>@media(max-width:600px){.b{background:url(../mod/page/view.php?id=101)}}</style>',
+            'parameter lead' => '<a href="index.php?a=1&amp;next=../mod/page/view.php?id=101">x</a>',
+            'call lead'      => '<a onclick="go(&quot;../mod/page/view.php?id=101&quot;)">x</a>',
+        ];
+        foreach ($fixed as $name => $content) {
+            $this->assertContains('view.php?id=201', $plugin->rewrite($content), 'should fix: ' . $name);
+        }
+        $preserved = [
+            'folder before'  => '<a href="pasta/index.php?next=../mod/page/view.php?id=101">x</a>',
+            'image before'   => '<style>.a{background:url(img/a.png)}.b{background:url(../mod/page/view.php?id=101)}</style>',
+            'credentials'    => 'u:s@10.0.0.5/mod/page/view.php?id=101',
+        ];
+        foreach ($preserved as $name => $content) {
+            $this->assertSame($content, $plugin->rewrite($content), 'should preserve: ' . $name);
+        }
     }
 }

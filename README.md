@@ -59,8 +59,10 @@ The text glued before the path is read back to the start of the run (a space, a 
 bracket) or to the previous link, whatever its length: every link in minified CSS or in an
 `onclick` is read. Line breaks and tabs do not end the run: browsers drop them from a URL, so an
 address split by them is still one address. Browsers also decode HTML entities (`&#47;`,
-`&sol;`) and read backslashes as slashes, and a scheme with one slash or none (`https:/host`,
-`http:host`) as an absolute address; so does the plugin. When the text follows spaces or line
+`&sol;`, `&Tab;`) and read a scheme with one slash or none (`https:/host`, `http:host`) as an
+absolute address; so does the plugin. A relative path is only fixed when it is plain - path
+characters after a plain lead such as `url(`, `href=` or `go("` - and the lead holds no slash,
+scheme, numeric character reference or backslash (which may be an escape, `\x2f`). When the text follows spaces or line
 breaks, the piece right before them is checked too, read the same way, because PDFs split
 addresses with spaces: if it looks like part of an address (`//`, a bare `http:` or `https:`, a
 domain such as `.org/` or `.org:`, or a trailing `/`, `.` or `-`), the link stays as it is.
@@ -337,9 +339,15 @@ needs PHP 7.1, and moodle-cs forbids `list()`. Use index access (`$a = $pair[0];
   space is malformed — the correct form is `%20`, which the plugin handles normally. Looking
   further back would stop the plugin from fixing relative links preceded by running text that
   holds an address, which are more common.
-- **A relative link in the same run as an absolute URL before it** is left alone: minified CSS
-  with `url(http://cdn/...)` before `url(../mod/...)`, or the same on consecutive lines, since
-  line breaks do not end a run. The plugin cannot tell whether the path belongs to that URL.
+- **A relative link after a slash in the same run** is left alone: minified CSS with
+  `url(http://cdn/...)`, `url(img/a.png)` or an inline image (`data:image/png;...`) before
+  `url(../mod/...)`, the same on consecutive lines (line breaks do not end a run), or
+  `folder/index.php?next=../mod/...`. The plugin cannot tell whether the path continues
+  something else.
+- **Backslashes** (`..\..\mod/...`) leave the link alone: a backslash may be a separator or an
+  escape.
+- **A source URL after an encoded character** (`login.php?a=1&amp;wantsurl=https://source/...`)
+  is left alone.
 - **The guard protects the content, not the choice of links.** It refuses a file where anything
   outside the links changed; it does not judge which links should have been rewritten.
 - **Relative** links to an activity not in the backup keep pointing to this site with a foreign

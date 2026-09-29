@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=649697e624b190674e68867f488e7c9b2250a52d8caa9f8be07c583afebba25c -->
+<!-- sync: README.md sha256=f3424db12d153e2b4059f0f1acb0958e459ed0318735811e19b85c02d2d36cb7 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -63,9 +63,12 @@ espaço, uma aspa, um sinal de maior ou menor) ou até o link anterior, qualquer
 que seja o tamanho: todo link de um CSS minificado ou de um `onclick` é lido.
 Quebras de linha e tabulações não encerram o trecho: o navegador as descarta da
 URL, então um endereço partido por elas continua sendo um endereço só. O
-navegador também decodifica entidades HTML (`&#47;`, `&sol;`), lê barras
-invertidas como barras, e lê esquema com uma barra ou nenhuma (`https:/host`,
-`http:host`) como endereço absoluto; o plugin também. Quando o texto vem depois
+navegador também decodifica entidades HTML (`&#47;`, `&sol;`, `&Tab;`) e lê
+esquema com uma barra ou nenhuma (`https:/host`, `http:host`) como endereço
+absoluto; o plugin também. Um caminho relativo só é corrigido quando é simples
+— caracteres de caminho depois de um começo simples como `url(`, `href=` ou
+`go("` — e esse começo não tem barra, esquema, referência numérica de caractere
+nem barra invertida (que pode ser um escape, `\x2f`). Quando o texto vem depois
 de espaços ou quebras de linha, o pedaço logo antes deles também é conferido,
 lido do mesmo jeito, porque o PDF parte endereços com espaços: se ele parece
 parte de um endereço (`//`, `http:` ou `https:` sozinhos, um domínio como
@@ -350,10 +353,15 @@ Atender ao Moodle 3.0 (PHP 5.6) e ao moodle-cs ao mesmo tempo impede a desestrut
   que o plugin trata normalmente. Olhar mais para trás faria o plugin deixar de
   corrigir links relativos precedidos de texto corrido com um endereço, que são
   mais comuns.
-- **Link relativo no mesmo trecho de uma URL absoluta anterior** fica como
-  está: CSS minificado com `url(http://cdn/...)` antes de `url(../mod/...)`, ou
-  o mesmo em linhas seguidas, já que quebra de linha não encerra o trecho. O
-  plugin não tem como saber se o caminho pertence àquela URL.
+- **Link relativo depois de uma barra no mesmo trecho** fica como está: CSS
+  minificado com `url(http://cdn/...)`, `url(img/a.png)` ou imagem inline
+  (`data:image/png;...`) antes de `url(../mod/...)`, o mesmo em linhas seguidas
+  (quebra de linha não encerra o trecho), ou `pasta/index.php?next=../mod/...`.
+  O plugin não tem como saber se o caminho continua outra coisa.
+- **Barra invertida** (`..\..\mod/...`) deixa o link como está: pode ser
+  separador ou escape.
+- **URL de origem depois de caractere codificado**
+  (`login.php?a=1&amp;wantsurl=https://origem/...`) fica como está.
 - **A trava protege o conteúdo, não a escolha dos links.** Ela recusa o
   arquivo em que algo fora dos links mudou; não julga quais links deveriam ter
   sido reescritos.
