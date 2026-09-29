@@ -170,6 +170,31 @@ final class pcre_limits_test extends advanced_testcase {
     }
 
     /**
+     * A run of megabytes without spaces stays linear.
+     *
+     * The unanchored prefix tried up to 300 characters from every position of
+     * the run: 2.3 s for 4 MB with the JIT, 22.6 s without it, and the file
+     * goes through the pattern three times. Now only the start of a run is
+     * tried.
+     */
+    public function test_megabyte_run_without_spaces_stays_linear(): void {
+        $plugin = $this->plugin();
+        $content = '<img src="data:image/png;base64,' . str_repeat('QUJD', 1024 * 1024) . '">'
+            . '<a href="../../mod/page/view.php?id=101">link</a>';
+
+        $start = microtime(true);
+        $result = $plugin->rewrite($content);
+        $elapsed = microtime(true) - $start;
+
+        $this->assertStringContainsString('view.php?id=201', $result);
+        $this->assertLessThan(
+            0.5,
+            $elapsed,
+            'the rewrite took ' . round($elapsed, 2) . ' s for 4 MB: a sign of backtracking'
+        );
+    }
+
+    /**
      * Long content with many words after an http:// must neither bring the
      * process down nor hit a limit.
      */
