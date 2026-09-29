@@ -47,26 +47,23 @@ rewritten is not remapped.
 
 ### When in doubt about the URL, leave it alone
 
-The plugin does not guess the shape of an address. When there is a hint of an absolute URL —
-`//`, credentials, or a segment that looks like a domain — and the base cannot be confirmed as
-exactly the source site's, the link stays exactly as it is. It also stays when the text glued
-before the path cannot be read whole: two URLs glued together (`url(a),url(b)` in CSS), or a
-URL carried in another's parameter (`other/r.php?u=source/mod/...`). Another Moodle in a
-subfolder of the source's host is another site; the host is compared ignoring case, the path
-is not.
+**Relative links are rewritten only where a link value starts** — right after `href=` or
+`src=` (quoted or not) or a CSS `url(`; in a `.js` file, also a string literal that starts a
+value (after `=`, `(`, `,`, `:` or `[`, never after `+`). The path must be plain, and a file
+with `<base href>` has no relative link rewritten. Anywhere else — `onclick`, inline
+`<script>`, running text — the link stays as it is. [DESIGN.md](DESIGN.md) records why:
+reading the text before a relative path to guess whether it was an address failed through five
+review rounds, each finding another form a browser reads as another site. **Do not reintroduce
+it**; extend the list of value openers instead.
 
-The text glued before the path is read back to the start of the run (a space, a quote, an angle
-bracket) or to the previous link, whatever its length: every link in minified CSS or in an
-`onclick` is read. Line breaks and tabs do not end the run: browsers drop them from a URL, so an
-address split by them is still one address. Browsers also decode HTML entities (`&#47;`,
-`&sol;`, `&Tab;`) and read a scheme with one slash or none (`https:/host`, `http:host`) as an
-absolute address; so does the plugin. A relative path is only fixed when it is plain - path
-characters after a plain lead such as `url(`, `href=` or `go("` - and the lead holds no slash,
-scheme, numeric character reference or backslash (which may be an escape, `\x2f`). When the text follows spaces or line
-breaks, the piece right before them is checked too, read the same way, because PDFs split
-addresses with spaces: if it looks like part of an address (`//`, a bare `http:` or `https:`, a
-domain such as `.org/` or `.org:`, or a trailing `/`, `.` or `-`), the link stays as it is.
-`background:` or `Activity:` before a space do not count.
+**Absolute links** are rewritten only when the base is exactly the source site's `wwwroot`.
+When there is a hint of an absolute URL — `//`, a scheme with one slash or none (`https:/host`,
+`http:host`), credentials — and the base cannot be confirmed, the link stays exactly as it is.
+It also stays when two URLs are glued together (`url(a),url(b)` in CSS), when the URL is
+carried in another's parameter (`other/r.php?u=source/mod/...`), or when anything before it is
+not plain (a slash, a scheme, an entity, a backslash). Another Moodle in a subfolder of the
+source's host is another site; the host is compared ignoring case, the path is not. The text is
+read as a browser reads it: entities decoded, line breaks and tabs dropped.
 
 This holds even for forms the plugin cannot read: IPv6 (`https://[2001:db8::1]/...`), a domain
 with an underscore, a long path, a double slash, a non-HTTP scheme. Failing to recognise an
@@ -332,20 +329,10 @@ needs PHP 7.1, and moodle-cs forbids `list()`. Use index access (`$a = $pair[0];
 - **A host split by hyphenation is not fixed.** Text pasted from a PDF arrives with the domain
   broken (`https:// site`, `exam- ple`, `site. org`). Since the space prevents reading the whole
   URL, the link is preserved rather than guessed.
-- **A URL with a literal space in the path** is preserved when the piece right before the
-  space looks like part of an address (`https://site/moodle 2/mod/...`). With several words
-  (`https://site/folder with space/mod/...`), that piece is a plain word, the path is read as
-  relative, and the id may be remapped even though it belongs to another site. An address with a
-  space is malformed — the correct form is `%20`, which the plugin handles normally. Looking
-  further back would stop the plugin from fixing relative links preceded by running text that
-  holds an address, which are more common.
-- **A relative link after a slash in the same run** is left alone: minified CSS with
-  `url(http://cdn/...)`, `url(img/a.png)` or an inline image (`data:image/png;...`) before
-  `url(../mod/...)`, the same on consecutive lines (line breaks do not end a run), or
-  `folder/index.php?next=../mod/...`. The plugin cannot tell whether the path continues
-  something else.
-- **Backslashes** (`..\..\mod/...`) leave the link alone: a backslash may be a separator or an
-  escape.
+- **Relative links outside a link value are not rewritten** (see [DESIGN.md](DESIGN.md)):
+  `onclick`, inline `<script>`, running text, a file with `<base href>`, a path after a `/` in
+  the same run (`url(img/a.png)` or an inline image before `url(../mod/...)` in minified CSS,
+  `folder/index.php?next=../mod/...`), or a path with a backslash (`..\..\mod/...`).
 - **A source URL after an encoded character** (`login.php?a=1&amp;wantsurl=https://source/...`)
   is left alone.
 - **The guard protects the content, not the choice of links.** It refuses a file where anything
