@@ -63,7 +63,7 @@ $string['cli_jswithlinks'] = 'of these, with an activity link';
 $string['cli_missing'] = '{$a} file(s) with no content in the filedir were skipped.
 This happens when the database came from another installation without its moodledata:
 the measurement then covers only part of the content.';
-$string['cli_otherhost'] = 'preserved: other site or unreadable';
+$string['cli_otherhost'] = 'preserved: not safe to rewrite';
 $string['cli_otherscript'] = 'missed: script outside the pattern';
 $string['cli_relative'] = '(relative)';
 $string['cli_resourcescourse'] = 'Resources analysed (course {$a})';

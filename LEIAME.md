@@ -1,4 +1,4 @@
-<!-- sync: README.md sha256=f3424db12d153e2b4059f0f1acb0958e459ed0318735811e19b85c02d2d36cb7 -->
+<!-- sync: README.md sha256=8fee736cb717984d1988d10ece3f5429711bb673b1c8da03cc120f3d8c2308c8 -->
 # local_resourcelinkfix
 
 English version: [README.md](README.md)
@@ -49,31 +49,27 @@ um cmid já reescrito não é remapeado.
 
 ### Na dúvida sobre a URL, não se toca
 
-O plugin não tenta adivinhar a forma de um endereço. Quando há indício de URL
-absoluta — `//`, credencial, ou um segmento que pareça domínio — e a base não
-pode ser confirmada como exatamente a do site de origem, o link fica
-exatamente como está. Também fica quando o texto colado antes do caminho não
-pode ser lido inteiro: duas URLs coladas (`url(a),url(b)` em CSS), ou uma URL
-levada no parâmetro de outra (`outro/r.php?u=origem/mod/...`). Outro Moodle
-numa subpasta do host de origem é outro site; o host é comparado sem
-diferenciar maiúsculas, o caminho não.
+**Link relativo só é reescrito onde começa um valor de link** — logo depois de
+`href=` ou `src=` (com ou sem aspas) ou de um `url(` de CSS; num arquivo `.js`,
+também um literal de string que começa um valor (depois de `=`, `(`, `,`, `:`
+ou `[`, nunca depois de `+`). O caminho precisa ser simples, e arquivo com
+`<base href>` não tem link relativo reescrito. Em qualquer outro lugar —
+`onclick`, `<script>` embutido, texto corrido — o link fica como está. O
+[DESIGN.md](DESIGN.md) registra o porquê: ler o texto antes de um caminho
+relativo para adivinhar se era endereço falhou em cinco rodadas de revisão,
+cada uma achando outra forma que o navegador lê como outro site. **Não
+reintroduzir**; amplie a lista de aberturas de valor.
 
-O texto colado antes do caminho é lido de volta até o início do trecho (um
-espaço, uma aspa, um sinal de maior ou menor) ou até o link anterior, qualquer
-que seja o tamanho: todo link de um CSS minificado ou de um `onclick` é lido.
-Quebras de linha e tabulações não encerram o trecho: o navegador as descarta da
-URL, então um endereço partido por elas continua sendo um endereço só. O
-navegador também decodifica entidades HTML (`&#47;`, `&sol;`, `&Tab;`) e lê
-esquema com uma barra ou nenhuma (`https:/host`, `http:host`) como endereço
-absoluto; o plugin também. Um caminho relativo só é corrigido quando é simples
-— caracteres de caminho depois de um começo simples como `url(`, `href=` ou
-`go("` — e esse começo não tem barra, esquema, referência numérica de caractere
-nem barra invertida (que pode ser um escape, `\x2f`). Quando o texto vem depois
-de espaços ou quebras de linha, o pedaço logo antes deles também é conferido,
-lido do mesmo jeito, porque o PDF parte endereços com espaços: se ele parece
-parte de um endereço (`//`, `http:` ou `https:` sozinhos, um domínio como
-`.org/` ou `.org:`, ou `/`, `.` ou `-` no fim), o link fica como está.
-`background:` ou `Atividade:` antes do espaço não contam.
+**Link absoluto** só é reescrito quando a base é exatamente o `wwwroot` do site
+de origem. Quando há indício de URL absoluta — `//`, esquema com uma barra ou
+nenhuma (`https:/host`, `http:host`), credencial — e a base não pode ser
+confirmada, o link fica exatamente como está. Também fica com duas URLs coladas
+(`url(a),url(b)` em CSS), com a URL levada no parâmetro de outra
+(`outro/r.php?u=origem/mod/...`), ou quando o que vem antes dela não é simples
+(barra, esquema, entidade, barra invertida). Outro Moodle numa subpasta do host
+de origem é outro site; o host é comparado sem diferenciar maiúsculas, o
+caminho não. O texto é lido como o navegador lê: entidades decodificadas,
+quebras de linha e tabulações descartadas.
 
 Isso vale inclusive para formas que o plugin não sabe ler: IPv6
 (`https://[2001:db8::1]/...`), domínio com underscore, caminho longo, barra
@@ -345,21 +341,12 @@ Atender ao Moodle 3.0 (PHP 5.6) e ao moodle-cs ao mesmo tempo impede a desestrut
 - **Host partido por hifenização não é corrigido.** Texto colado de PDF chega
   com o domínio quebrado (`https:// site`, `exam- ple`, `site. org`). Como o
   espaço impede ler a URL inteira, o link é preservado em vez de adivinhado.
-- **URL com espaço literal no caminho** é preservada quando o pedaço logo antes
-  do espaço parece parte de um endereço (`https://site/moodle 2/mod/...`). Com
-  várias palavras (`https://site/pasta com espaco/mod/...`), esse pedaço é uma
-  palavra comum, o caminho é lido como relativo, e o id pode ser remapeado mesmo
-  sendo de outro site. Endereço com espaço é malformado — o correto é `%20`,
-  que o plugin trata normalmente. Olhar mais para trás faria o plugin deixar de
-  corrigir links relativos precedidos de texto corrido com um endereço, que são
-  mais comuns.
-- **Link relativo depois de uma barra no mesmo trecho** fica como está: CSS
-  minificado com `url(http://cdn/...)`, `url(img/a.png)` ou imagem inline
-  (`data:image/png;...`) antes de `url(../mod/...)`, o mesmo em linhas seguidas
-  (quebra de linha não encerra o trecho), ou `pasta/index.php?next=../mod/...`.
-  O plugin não tem como saber se o caminho continua outra coisa.
-- **Barra invertida** (`..\..\mod/...`) deixa o link como está: pode ser
-  separador ou escape.
+- **Link relativo fora de um valor de link não é reescrito** (ver
+  [DESIGN.md](DESIGN.md)): `onclick`, `<script>` embutido, texto corrido,
+  arquivo com `<base href>`, caminho depois de uma `/` no mesmo trecho
+  (`url(img/a.png)` ou imagem inline antes de `url(../mod/...)` em CSS
+  minificado, `pasta/index.php?next=../mod/...`), ou caminho com barra
+  invertida (`..\..\mod/...`).
 - **URL de origem depois de caractere codificado**
   (`login.php?a=1&amp;wantsurl=https://origem/...`) fica como está.
 - **A trava protege o conteúdo, não a escolha dos links.** Ela recusa o

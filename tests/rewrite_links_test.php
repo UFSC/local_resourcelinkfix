@@ -393,8 +393,9 @@ final class rewrite_links_test extends advanced_testcase {
      */
     public function test_text_before_path_does_not_become_host(): void {
         $plugin = $this->plugin();
+        // Running text is not a place where a link value starts: left alone.
         $this->assertSame(
-            'veja em https://x.example.org e depois mod/page/view.php?id=201',
+            'veja em https://x.example.org e depois mod/page/view.php?id=101',
             $plugin->rewrite('veja em https://x.example.org e depois mod/page/view.php?id=101')
         );
     }
@@ -826,13 +827,13 @@ final class rewrite_links_test extends advanced_testcase {
      */
     public function test_text_before_a_space_that_is_not_an_address(): void {
         $plugin = $this->plugin();
-        $cases = [
-            'word'             => 'veja mod/page/view.php?id=101',
-            'closed attribute' => "<a title=\"x\"\nhref=../../mod/page/view.php?id=101>x</a>",
-            'after a quote'    => '<a href="https://terceiro.example.com/">t</a> "../mod/page/view.php?id=101"',
-        ];
-        foreach ($cases as $name => $content) {
-            $this->assertStringContainsString('view.php?id=201', $plugin->rewrite($content), 'should fix: ' . $name);
+        $this->assertStringContainsString(
+            'view.php?id=201',
+            $plugin->rewrite("<a title=\"x\"\nhref=../../mod/page/view.php?id=101>x</a>")
+        );
+        // Outside a link value - running text, a loose quoted string - the link stays.
+        foreach (['veja mod/page/view.php?id=101', '<a href="/">t</a> "../mod/page/view.php?id=101"'] as $content) {
+            $this->assertSame($content, $plugin->rewrite($content));
         }
     }
 
@@ -842,9 +843,8 @@ final class rewrite_links_test extends advanced_testcase {
     public function test_every_link_in_a_run_is_fixed(): void {
         $plugin = $this->plugin();
         $this->assertSame(
-            '<a onclick="a(&quot;../mod/page/view.php?id=201&quot;);b(&quot;../mod/page/view.php?id=202&quot;)">x</a>',
-            $plugin->rewrite('<a onclick="a(&quot;../mod/page/view.php?id=101&quot;);'
-                . 'b(&quot;../mod/page/view.php?id=102&quot;)">x</a>')
+            '<a href="../mod/page/view.php?id=201">a</a><a href="../mod/page/view.php?id=202">b</a>',
+            $plugin->rewrite('<a href="../mod/page/view.php?id=101">a</a><a href="../mod/page/view.php?id=102">b</a>')
         );
 
         $filler = str_repeat('.c{color:red}', 30);
@@ -957,7 +957,6 @@ final class rewrite_links_test extends advanced_testcase {
             'style block'    => '<style>.b { background: url(../mod/page/view.php?id=101); }</style>',
             'inline style'   => '<div style="background-image: url(../mod/page/view.php?id=101)">x</div>',
             'minified style' => '<style>.box{background: url(../mod/page/view.php?id=101)}</style>',
-            'running text'   => '<p>Atividade: mod/page/view.php?id=101</p>',
         ];
         foreach ($cases as $name => $content) {
             $this->assertStringContainsString('view.php?id=201', $plugin->rewrite($content), 'should fix: ' . $name);
@@ -1061,16 +1060,6 @@ final class rewrite_links_test extends advanced_testcase {
     }
 
     /**
-     * Entities in a relative link's prefix do not stop it from being fixed.
-     */
-    public function test_entities_in_a_relative_prefix(): void {
-        $plugin = $this->plugin();
-        $this->assertSame(
-            '<a href="index.php?a=1&amp;next=../mod/page/view.php?id=201">x</a>',
-            $plugin->rewrite('<a href="index.php?a=1&amp;next=../mod/page/view.php?id=101">x</a>')
-        );
-    }
-    /**
      * Encoded and escaped forms of another site's address are left alone.
      *
      * A relative link is only accepted when its prefix is a plain path after a
@@ -1105,9 +1094,7 @@ final class rewrite_links_test extends advanced_testcase {
     public function test_lead_before_a_relative_path(): void {
         $plugin = $this->plugin();
         $fixed = [
-            'CSS lead'       => '<style>@media(max-width:600px){.b{background:url(../mod/page/view.php?id=101)}}</style>',
-            'parameter lead' => '<a href="index.php?a=1&amp;next=../mod/page/view.php?id=101">x</a>',
-            'call lead'      => '<a onclick="go(&quot;../mod/page/view.php?id=101&quot;)">x</a>',
+            'CSS lead' => '<style>@media(max-width:600px){.b{background:url(../mod/page/view.php?id=101)}}</style>',
         ];
         foreach ($fixed as $name => $content) {
             $this->assertStringContainsString('view.php?id=201', $plugin->rewrite($content), 'should fix: ' . $name);
@@ -1116,9 +1103,103 @@ final class rewrite_links_test extends advanced_testcase {
             'folder before'  => '<a href="pasta/index.php?next=../mod/page/view.php?id=101">x</a>',
             'image before'   => '<style>.a{background:url(img/a.png)}.b{background:url(../mod/page/view.php?id=101)}</style>',
             'credentials'    => 'u:s@10.0.0.5/mod/page/view.php?id=101',
+            'parameter lead' => '<a href="index.php?a=1&amp;next=../mod/page/view.php?id=101">x</a>',
+            'call lead'      => '<a onclick="go(&quot;../mod/page/view.php?id=101&quot;)">x</a>',
         ];
         foreach ($preserved as $name => $content) {
             $this->assertSame($content, $plugin->rewrite($content), 'should preserve: ' . $name);
         }
+    }
+    /**
+     * A relative link is only fixed where a link value starts.
+     *
+     * In HTML: right after 'href=', 'src=' (quoted or not) or a CSS 'url('.
+     * Anywhere else the plugin cannot know whose address the path continues -
+     * see DESIGN.md, which records why reading the text before the path was
+     * abandoned.
+     */
+    public function test_relative_links_only_where_a_value_starts(): void {
+        $plugin = $this->plugin();
+        $path = 'mod/page/view.php?id=101';
+        $fixed = [
+            'href, double quotes'  => '<a href="../' . $path . '">x</a>',
+            'href, single quotes'  => "<a href='../" . $path . "'>x</a>",
+            'href, no quotes'      => '<a href=../' . $path . '>x</a>',
+            'href, spaces, upper'  => '<a HREF = "../' . $path . '">x</a>',
+            'src'                  => '<iframe src="../' . $path . '"></iframe>',
+            'CSS url()'            => '<style>.b{background:url(../' . $path . ')}</style>',
+            'CSS url() with quote' => '<style>.b{background:url( "../' . $path . '")}</style>',
+            'start of the text'    => '../' . $path,
+        ];
+        foreach ($fixed as $name => $content) {
+            $this->assertStringContainsString('view.php?id=201', $plugin->rewrite($content), 'should fix: ' . $name);
+        }
+        $other = 'https://10.0.0.5';
+        $preserved = [
+            'running text'              => '<p>Atividade: ' . $path . '</p>',
+            'onclick'                   => '<a onclick="go(&quot;../' . $path . '&quot;)">x</a>',
+            'inline script'             => "<script>var u = '../" . $path . "';</script>",
+            'quote inside the value'    => '<a href="' . $other . '/\'/../' . $path . '">x</a>',
+            'double quote inside value' => "<a href='" . $other . '/"/../' . $path . "'>x</a>",
+            'less-than inside value'    => '<a href="' . $other . '/</../' . $path . '">x</a>',
+            'greater-than inside value' => '<a href="' . $other . '/>/../' . $path . '">x</a>',
+            'apostrophe inside value'   => '<a href="' . $other . '/l\'aula/../' . $path . '">x</a>',
+            'parameter of another site' => '<a href="' . $other . '/mod/forum/view.php?id=5&amp;returnurl=/' . $path . '">x</a>',
+            'JS concatenation'          => '<script>location.href="' . $other . '/"+"' . $path . '"</script>',
+            'JS concatenation, slash'   => "<script>var u='" . $other . "'+'/" . $path . "'</script>",
+            'ftp, one slash'            => '<a href="ftp:/10.0.0.5/' . $path . '">x</a>',
+            'ftp, no slash'             => '<a href="ftp:10.0.0.5/' . $path . '">x</a>',
+            'ftp, single label'         => '<a href="ftp:moodle/' . $path . '">x</a>',
+            'wss, no slash'             => '<a href="wss:10.0.0.5/' . $path . '">x</a>',
+            'ftp, domain and port'      => '<a href="ftp:other.example.org:21/' . $path . '">x</a>',
+            'domain and port'           => '<a href="other.example.org:8080/' . $path . '">x</a>',
+            'credentials, port'         => '<a href="u@other.example.org:8080/' . $path . '">x</a>',
+        ];
+        foreach ($preserved as $name => $content) {
+            $this->assertSame($content, $plugin->rewrite($content), 'should preserve: ' . $name);
+        }
+    }
+
+    /**
+     * With a <base href>, relative links resolve elsewhere: none is fixed.
+     *
+     * Absolute links from the source carry their own host and are still fixed.
+     */
+    public function test_base_href_leaves_relative_links_alone(): void {
+        $plugin = $this->plugin();
+        $head = '<head><base href="https://10.0.0.5/"></head><a href="mod/page/view.php?id=101">a</a>';
+        $this->assertSame(
+            $head . '<a href="' . self::TARGET . '/mod/page/view.php?id=202">b</a>',
+            $plugin->rewrite($head . '<a href="' . self::SOURCE . '/mod/page/view.php?id=102">b</a>')
+        );
+    }
+
+    /**
+     * In a .js file, a string literal that starts a value is a link value too.
+     *
+     * Only when rewriting .js is on. A literal after '+' continues another
+     * string, and is left alone.
+     */
+    public function test_string_literal_is_a_value_in_javascript(): void {
+        $plugin = $this->plugin(true);
+        $path = 'mod/page/view.php?id=101';
+        $fixed = [
+            'assignment' => "var u = '../../" . $path . "';",
+            'argument'   => 'go("../' . $path . '");',
+            'property'   => "{ link: '../" . $path . "' }",
+            'array'      => "['../" . $path . "']",
+        ];
+        foreach ($fixed as $name => $js) {
+            $this->assertStringContainsString('view.php?id=201', $plugin->rewrite($js, 'js'), 'should fix: ' . $name);
+        }
+        $preserved = [
+            'concatenation'        => 'location.href = "https://10.0.0.5/" + "' . $path . '";',
+            'concatenation, slash' => "var u = 'https://10.0.0.5' + '/" . $path . "';",
+        ];
+        foreach ($preserved as $name => $js) {
+            $this->assertSame($js, $plugin->rewrite($js, 'js'), 'should preserve: ' . $name);
+        }
+        // The same literal in an HTML file is not a link value.
+        $this->assertSame($fixed['assignment'], $plugin->rewrite($fixed['assignment']));
     }
 }

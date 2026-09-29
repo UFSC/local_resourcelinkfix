@@ -69,10 +69,11 @@ class local_resourcelinkfix_testable_plugin extends restore_local_resourcelinkfi
      * Exposes rewrite_links() to the tests.
      *
      * @param string $content
+     * @param string $mode 'html', or 'js' for a .js file.
      * @return string
      */
-    public function rewrite($content) {
-        return $this->rewrite_links($content);
+    public function rewrite($content, $mode = 'html') {
+        return $this->rewrite_links($content, $mode);
     }
 
     /**
