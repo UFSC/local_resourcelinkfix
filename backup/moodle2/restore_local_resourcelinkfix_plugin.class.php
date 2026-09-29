@@ -219,132 +219,73 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
     }
 
     /**
-     * Does the prefix glued before the path indicate an absolute URL?
+     * Reads the prefix glued before the path.
      *
-     * Three questions that do not depend on predicting the host's shape, and
-     * so let no new URL form slip through.
-     *
-     * @param string $prefix
-     * @return bool
-     */
-    protected function looks_absolute($prefix) {
-        if (strpos($prefix, '://') !== false) {
-            return true;
-        }
-        if (strpos($prefix, '//') === 0) {
-            return true;
-        }
-        if (strpos($prefix, '@') !== false) {
-            return true;
-        }
-        // The last segment looks like a domain ('ple.com/'). Covers the host
-        // split by hyphenation, where the '://' was left behind the space and
-        // did not enter the prefix. When in doubt, treat it as absolute: the
-        // cost of erring this way is only not fixing one link.
-        return (bool)preg_match('~\.[a-z]{2,}(?::\d+)?/?$~i', $prefix);
-    }
-
-    /**
-     * Reduces a prefix to a comparable form: no scheme, no hyphenation
-     * spaces, no credentials, no junk before the URL.
-     *
-     * Comparing the whole BASE, not just the host, is what recognises a
-     * Moodle installed in a subfolder - where the wwwroot is 'site/moodle'.
+     * The link is absolute when the prefix has an authority mark ('//'). What
+     * comes before its scheme - 'url(', 'href=' - is the lead, kept as it is.
+     * The link is left alone, by returning false, whenever the prefix cannot
+     * be read without guessing:
+     * - more than one '//': two URLs glued together, or one URL carried in
+     *   another's parameter, and there is no telling which the path belongs to;
+     * - a scheme other than http or https, or credentials;
+     * - no '//', but a segment that looks like a domain ('ple.org/'): a host
+     *   split by hyphenation, whose scheme was left behind the space;
+     * - an absolute URL whose base is not exactly the source's wwwroot.
      *
      * @param string $prefix
-     * @return string|null Null when there is no readable base.
+     * @return array|false|null Null for a relative path; false to leave the
+     *                          link alone; for the source site, [lead, whether
+     *                          the URL has a scheme].
      */
-    protected function normalize_base($prefix) {
-        // Hyphenation in text pasted from a PDF: 'moo- dle', 'https:// site'.
-        $clean = preg_replace('/-[ \t]+/', '', $prefix);
-        $clean = preg_replace('/[ \t]+/', '', $clean);
+    protected function read_prefix($prefix) {
+        $marks = substr_count($prefix, '//');
+        if ($marks === 0) {
+            if (strpos($prefix, '@') !== false) {
+                return false;
+            }
+            foreach (explode('/', $prefix) as $segment) {
+                if (preg_match('~\.[a-z]{2,}(?::\d+)?$~i', $segment)) {
+                    return false;
+                }
+            }
+            return null;
+        }
+        if ($marks > 1 || $this->oldwwwroot === '') {
+            return false;
+        }
 
-        // Cuts whatever comes before the URL: 'url(', 'href=', text.
-        $pos = strrpos($clean, '://');
-        if ($pos !== false) {
-            $start = $pos;
-            while ($start > 0 && preg_match('~[a-z0-9+.\-]~i', $clean[$start - 1])) {
+        $pos = strpos($prefix, '//');
+        $start = $pos;
+        $hasscheme = ($pos > 0 && $prefix[$pos - 1] === ':');
+        if ($hasscheme) {
+            $start = $pos - 1;
+            while ($start > 0 && preg_match('~[a-z0-9+.\-]~i', $prefix[$start - 1])) {
                 $start--;
             }
-            $clean = substr($clean, $start);
+            if (!preg_match('~^https?$~i', substr($prefix, $start, $pos - 1 - $start))) {
+                return false;
+            }
         }
 
-        // Strips the scheme and the authority mark, if any.
-        $clean = preg_replace('~^[a-z][a-z0-9+.\-]*:~i', '', $clean);
-        $clean = preg_replace('~^//~', '', $clean);
-        // Credentials are not part of the site's identity.
-        $clean = preg_replace('~^[^/@]*@~', '', $clean);
-
-        return ($clean === '') ? null : $clean;
+        // The base must be the source's wwwroot, whole: 'site/' is not 'site/other/'.
+        $base = substr($prefix, $pos + 2);
+        if (strpos($base, '@') !== false) {
+            return false;
+        }
+        if (strcasecmp($base, $this->strip_scheme($this->oldwwwroot) . '/') !== 0) {
+            return false;
+        }
+        return [substr($prefix, 0, $start), $hasscheme];
     }
 
     /**
-     * Does the prefix point to the site where the backup was made?
+     * A wwwroot without its scheme and authority mark: 'site/moodle'.
      *
-     * The comparison is by string start, with the trailing slash included, so
-     * that 'origem.org.outro.com/' does not pass for 'origem.org/'.
-     *
-     * @param string $prefix
-     * @return bool
-     */
-    protected function is_origin_prefix($prefix) {
-        if ($this->oldwwwroot === '') {
-            return false;
-        }
-
-        // Without the authority mark in the prefix there is no telling the URL
-        // was read whole: a scheme may come before it, cut off by a
-        // hyphenation space. Claiming the source here would produce an address
-        // with two schemes glued together.
-        if (strpos(preg_replace('/[ \t]+/', '', $prefix), '//') === false) {
-            return false;
-        }
-
-        $base = $this->normalize_base($prefix);
-        $origin = $this->normalize_base($this->oldwwwroot . '/');
-        if ($base === null || $origin === null) {
-            return false;
-        }
-        return (strcasecmp(substr($base, 0, strlen($origin)), $origin) === 0);
-    }
-
-    /**
-     * Replaces the authority (scheme + host) inside the prefix, keeping what
-     * comes before it and the intermediate path.
-     *
-     * @param string $prefix
-     * @param string $target New wwwroot.
+     * @param string $wwwroot
      * @return string
      */
-    protected function replace_authority($prefix, $target) {
-        // From the authority to the end of the prefix, tolerating hyphenation.
-        $pattern = '~(?:[a-z][a-z0-9+.\-]*:)?[ \t]*//.*$~i';
-        if (preg_match($pattern, $prefix)) {
-            return preg_replace($pattern, $target . '/', $prefix, 1);
-        }
-        // Split host with no '//' visible in the prefix: replaces the trailing
-        // part that looks like a domain.
-        return preg_replace('~[^\s/]*\.[a-z]{2,}(?::\d+)?/?$~i', $target . '/', $prefix, 1);
-    }
-
-    /**
-     * Is the host that of the site where the backup was made?
-     *
-     * A scheme-less URL inherits the page's scheme, so the comparison ignores
-     * the scheme on both sides in that case.
-     *
-     * @param string $host
-     * @return bool
-     */
-    protected function is_origin_host($host) {
-        if ($this->oldwwwroot === '') {
-            return false;
-        }
-        $origin = $this->oldwwwroot;
-        if (strpos($host, '//') === 0) {
-            $origin = preg_replace('~^https?:~i', '', $origin);
-        }
-        return (strcasecmp($host, $origin) === 0);
+    protected function strip_scheme($wwwroot) {
+        return preg_replace('~^[a-z][a-z0-9+.\-]*://~i', '', $wwwroot);
     }
 
     /**
@@ -367,8 +308,26 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         $marker = "\x00" . 'RLFLINK' . "\x00";
         $pattern = self::get_link_pattern();
 
-        $maskedold = preg_replace($pattern, $marker, $old);
-        $maskednew = preg_replace($pattern, $marker, $new);
+        // Only the path and the id are masked. The prefix stays, with the
+        // source's and this site's wwwroot reduced to one token: a rewrite may
+        // swap one for the other, and nothing else in the prefix.
+        $roots = [];
+        foreach ([$this->oldwwwroot, $this->newwwwroot] as $root) {
+            if ($root !== '') {
+                $roots[] = preg_quote($this->strip_scheme($root), '~');
+            }
+        }
+        $rootpattern = $roots ? '~(?:https?:)?//(?:' . implode('|', $roots) . ')/~i' : null;
+        $mask = function ($m) use ($marker, $rootpattern) {
+            $prefix = $m[1];
+            if ($rootpattern !== null) {
+                $prefix = preg_replace($rootpattern, "\x00RLFROOT\x00", $prefix);
+            }
+            return $prefix . $marker;
+        };
+
+        $maskedold = preg_replace_callback($pattern, $mask, $old);
+        $maskednew = preg_replace_callback($pattern, $mask, $new);
 
         // Without a reliable mask there is no check: say no, to be safe.
         if ($maskedold === null || $maskednew === null) {
@@ -522,9 +481,9 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
      * exactly the same pattern: if the two diverge, the report measures
      * something other than what the plugin does.
      *
-     * Groups: 1 prefix glued before the path (up to 300 characters, no
-     * whitespace, quotes or angle brackets; may be empty), 2 path up to
-     * '?id=', 3 path, 4 script, 5 id.
+     * Groups: 1 prefix glued before the path (from the start of the run, up
+     * to 300 characters, no whitespace, quotes or angle brackets; may be
+     * empty), 2 path up to '?id=', 3 path, 4 script, 5 id.
      *
      * @return string
      */
@@ -537,9 +496,15 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         // Recognising the host by regex was what failed: every unforeseen
         // form - IPv6, underscore, long path, double slash - was read as a
         // relative path and had its id remapped, pointing to another Moodle
-        // with an id from here. The limit of 300 prevents backtracking on a
-        // long run without spaces.
-        return '~([^\s"\'<>]{0,300})(?<![a-z0-9_])' .
+        // with an id from here.
+        //
+        // The prefix starts where the run starts - after a space, a quote, an
+        // angle bracket, or at the start of the text - never in the middle of
+        // it. A prefix cut by the limit of 300 would hide the start of the URL,
+        // and a third site would pass for a relative path: past the limit, the
+        // link is left alone. Starting only at the run's start also keeps a
+        // long run without spaces (base64) linear.
+        return '~(?<![^\s"\'<>])([^\s"\'<>]{0,300})(?<![a-z0-9_])' .
                '((mod/[a-z0-9_]+/(view|index|complete)|course/view)\.php\?id=)(\d+)(?!\d)~i';
     }
 
@@ -573,7 +538,8 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             // stays as it is. A stale link is better than one that points to
             // another Moodle with an id from here and silently opens the wrong
             // activity.
-            if ($this->looks_absolute($prefix) && !$this->is_origin_prefix($prefix)) {
+            $source = $this->read_prefix($prefix);
+            if ($source === false) {
                 return $m[0];
             }
 
@@ -581,16 +547,17 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             $new = $this->map_id($m[3], $m[4], $id);
 
             $output = $prefix . $m[2] . $new;
-            if ($new !== $id && $this->looks_absolute($prefix)) {
-                // Source host, remapped id: the authority becomes this site's
-                // too. Only it is replaced - whatever comes before it in the
-                // prefix ('url(', for example) is kept.
-                $target = $this->newwwwroot;
-                if (preg_match('~^[ \t]*//~', $prefix)) {
-                    // No scheme: the form is kept, it inherits the page's.
-                    $target = preg_replace('~^https?:~i', '', $target);
+            if ($source !== null) {
+                // Source site. The host goes together with the id: if the id
+                // stays the other site's, so does the host.
+                if ($new === $id) {
+                    return $m[0];
                 }
-                $output = $this->replace_authority($prefix, $target) . $m[2] . $new;
+                // Only the URL is replaced - its lead ('url(', for example) is
+                // kept. Without a scheme the form is kept too: it inherits the
+                // page's.
+                $target = $source[1] ? $this->newwwwroot : '//' . $this->strip_scheme($this->newwwwroot);
+                $output = $source[0] . $target . '/' . $m[2] . $new;
             }
 
             if ($output !== $m[0]) {

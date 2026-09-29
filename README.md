@@ -48,8 +48,11 @@ rewritten is not remapped.
 ### When in doubt about the URL, leave it alone
 
 The plugin does not guess the shape of an address. When there is a hint of an absolute URL —
-`://`, a leading `//`, credentials, or a last segment that looks like a domain — and the base
-cannot be confirmed as the source site's, the link stays exactly as it is.
+`//`, credentials, or a segment that looks like a domain — and the base cannot be confirmed as
+exactly the source site's, the link stays exactly as it is. It also stays when the text glued
+before the path cannot be read whole: two URLs glued together (`url(a),url(b)` in CSS), a URL
+carried in another's parameter (`other/r.php?u=source/mod/...`), or more than 300 characters
+glued before the path. Another Moodle in a subfolder of the source's host is another site.
 
 This holds even for forms the plugin cannot read: IPv6 (`https://[2001:db8::1]/...`), a domain
 with an underscore, a long path, a double slash, a non-HTTP scheme. Failing to recognise an
