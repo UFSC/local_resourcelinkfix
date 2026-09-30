@@ -82,8 +82,10 @@ $string['errorcontentlost'] = 'Content loss prevented in {$a->file} (cmid {$a->c
     . ' ({$a->oldsize} bytes before, {$a->newsize} after). The file was left untouched; both versions'
     . ' follow in the log.';
 $string['errorpcre'] = 'The regular expression engine gave up on this file (PCRE error {$a}); the file was left untouched.';
+$string['errorrewritefailed'] = 'local_resourcelinkfix: failed to rewrite {$a->file} (cmid {$a->cmid}): {$a->error}';
 $string['logdryrun'] = 'local_resourcelinkfix [SIMULATION]: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) would be rewritten';
 $string['logrewritten'] = 'local_resourcelinkfix: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) rewritten';
+$string['logtruncated'] = 'local_resourcelinkfix [{$a->label}] ... truncated at {$a->limit} of {$a->size} bytes';
 $string['pluginname'] = 'Resource link fix (restore)';
 $string['privacy:metadata'] = 'The plugin does not store any personal data.';
 $string['rewritejs'] = 'Also rewrite .js files';
