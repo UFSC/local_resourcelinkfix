@@ -1,9 +1,10 @@
 name: Moodle Plugin CI
 
 on:
-  # Pushes only on the branches whose versions this file knows. A work branch
-  # (fix-*-405) would fall into DEFAULT_VERSIONS and test Moodle versions the
-  # plugin does not support there; its pull request tests the base branch.
+  # Pushes only on the default branch and on MOODLE_XX_STABLE. A push on a work
+  # branch (fix-*-405) would fall into DEFAULT_VERSIONS and test Moodle versions
+  # the plugin does not support there; its pull request tests the base branch.
+  # Tags do not trigger: with only `branches` set, GitHub skips tag pushes.
   push:
     branches:
       - main
@@ -20,7 +21,9 @@ permissions:
   contents: read
 
 env:
-  # Versions tested on main and on pull requests into it (a pull request uses its base branch).
+  # Versions tested on any branch the `versions` job does not know: main, pull requests
+  # into it, and a manual run or a pull request based on a work branch. A pull request
+  # uses its base branch. A new MOODLE_XX_STABLE needs its line in that job.
   # Belongs to the plugin and is the same on all its branches. Codes: 30 38 401 405.
   DEFAULT_VERSIONS: "30 38"
 
