@@ -15,40 +15,36 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Privacy provider for local_resourcelinkfix.
+ * String manager that marks what get_string() returns.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-namespace local_resourcelinkfix\privacy;
-
-// Only loaded on Moodle 3.4+ (Privacy API). Harmless on 3.0.
 /**
- * Privacy provider: the plugin stores no personal data.
+ * String manager that wraps every string it returns in markers.
+ *
+ * The English strings read exactly like the literal texts they replace, so
+ * comparing text alone cannot tell get_string() from a literal. With this
+ * manager active, only a message that went through get_string() carries the
+ * markers.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class provider implements \core_privacy\local\metadata\null_provider {
-    // The interface declares get_reason(): string, a return type PHP 5.6
-    // cannot parse. The core polyfill supplies get_reason() and calls
-    // _get_reason(), which can be written without it.
-    use \core_privacy\local\legacy_polyfill;
-
-    // The leading underscore is the name the core trait calls, not a visibility marker.
-    // phpcs:disable PSR2.Methods.MethodDeclaration.Underscore
-
+class local_resourcelinkfix_marked_string_manager extends core_string_manager_standard {
     /**
-     * Key of the string explaining why there is no personal data.
+     * Returns the string wrapped in markers.
      *
+     * @param string $identifier
+     * @param string $component
+     * @param string|object|array $a
+     * @param string $lang
      * @return string
      */
-    public static function _get_reason() {
-        return 'privacy:metadata';
+    public function get_string($identifier, $component = '', $a = null, $lang = null) {
+        return '<<' . parent::get_string($identifier, $component, $a, $lang) . '>>';
     }
-
-    // phpcs:enable PSR2.Methods.MethodDeclaration.Underscore
 }

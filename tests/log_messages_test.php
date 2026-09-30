@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Tests for the texts the plugin writes to the restore log.
+ * Tests for the sentences the plugin writes to the restore log.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -35,10 +35,17 @@ use moodle_exception;
 defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
-require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/log_fixtures.php');
+require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/marked_string_manager.php');
+require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/memory_logger.php');
+require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/fake_task.php');
+require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/logging_plugin.php');
 
 /**
- * Every text the plugin logs comes from the language pack.
+ * The sentences the plugin logs come from the language pack, and the English
+ * text is the one the log had before.
+ *
+ * The header of each chunk of logged content ("[BEFORE 1/3]") stays literal:
+ * it frames the data, it is not a sentence.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
@@ -47,26 +54,36 @@ require_once($CFG->dirroot . '/local/resourcelinkfix/tests/fixtures/log_fixtures
  * @covers     \restore_local_resourcelinkfix_plugin
  */
 final class log_messages_test extends advanced_testcase {
+    /** @var string|null String manager configured before the test, if any. */
+    protected $previousmanager;
+
     /**
      * Switches to the string manager that marks what get_string() returns.
      */
     protected function setUp() {
         global $CFG;
+        $settings = $CFG->config_php_settings;
+        $this->previousmanager = isset($settings['customstringmanager']) ? $settings['customstringmanager'] : null;
         $CFG->config_php_settings['customstringmanager'] = 'local_resourcelinkfix_marked_string_manager';
         get_string_manager(true);
     }
 
     /**
-     * Goes back to the standard string manager.
+     * Goes back to the string manager configured before the test.
      */
     protected function tearDown() {
         global $CFG;
-        unset($CFG->config_php_settings['customstringmanager']);
+        if ($this->previousmanager === null) {
+            unset($CFG->config_php_settings['customstringmanager']);
+        } else {
+            $CFG->config_php_settings['customstringmanager'] = $this->previousmanager;
+        }
         get_string_manager(true);
     }
 
     /**
-     * The warning for a file that could not be rewritten comes from get_string().
+     * The warning for a file that could not be rewritten comes from get_string(),
+     * with the English text the literal had.
      */
     public function test_rewrite_failure_message_comes_from_the_language_pack() {
         global $USER;
@@ -87,12 +104,10 @@ final class log_messages_test extends advanced_testcase {
         $plugin->set_task(new local_resourcelinkfix_fake_task($resource->cmid, $course->id, $logger));
         $plugin->after_restore_module();
 
+        // The text the literal produced, inside the markers of get_string().
         $error = new moodle_exception('errorpcre', 'local_resourcelinkfix', '', PREG_BACKTRACK_LIMIT_ERROR);
-        $expected = get_string('errorrewritefailed', 'local_resourcelinkfix', (object)[
-            'file' => '/index.html',
-            'cmid' => (int)$resource->cmid,
-            'error' => $error->getMessage(),
-        ]);
+        $expected = '<<local_resourcelinkfix: failed to rewrite /index.html (cmid ' . $resource->cmid . '): '
+            . $error->getMessage() . '>>';
         $this->assertSame([[$expected, backup::LOG_WARNING]], $logger->messages);
     }
 
@@ -113,7 +128,8 @@ final class log_messages_test extends advanced_testcase {
     }
 
     /**
-     * Content beyond the cap ends with a truncation notice from get_string().
+     * Content beyond the cap ends with a truncation notice from get_string(),
+     * with the English text the literal had.
      *
      * @dataProvider content_size_provider
      * @param int $size Content size in bytes.
@@ -125,11 +141,8 @@ final class log_messages_test extends advanced_testcase {
         $plugin->set_task(new local_resourcelinkfix_fake_task(0, 0, $logger));
         $plugin->log_content_for_test('BEFORE', str_repeat('x', $size));
 
-        $expected = get_string('logtruncated', 'local_resourcelinkfix', (object)[
-            'label' => 'BEFORE',
-            'limit' => 8192,
-            'size' => $size,
-        ]);
+        // The text the literal produced, inside the markers of get_string().
+        $expected = '<<local_resourcelinkfix [BEFORE] ... truncated at 8192 of ' . $size . ' bytes>>';
         $found = 0;
         $mentions = 0;
         foreach ($logger->messages as $entry) {
@@ -144,5 +157,47 @@ final class log_messages_test extends advanced_testcase {
         $this->assertSame($notices, $found);
         // No other line may announce a truncation, literal or not.
         $this->assertSame($notices, $mentions);
+    }
+
+    /**
+     * Each translation uses the same placeholders as the English string.
+     *
+     * A placeholder missing from pt_br would print the raw "{$a->...}" in the log.
+     */
+    public function test_translation_uses_the_same_placeholders() {
+        global $CFG;
+
+        $en = $this->load_strings($CFG->dirroot . '/local/resourcelinkfix/lang/en/local_resourcelinkfix.php');
+        $ptbr = $this->load_strings($CFG->dirroot . '/local/resourcelinkfix/lang/pt_br/local_resourcelinkfix.php');
+
+        $this->assertSame(array_keys($en), array_keys($ptbr));
+        foreach ($en as $key => $text) {
+            $this->assertSame($this->placeholders($text), $this->placeholders($ptbr[$key]), $key);
+        }
+    }
+
+    /**
+     * Reads a language file without going through the string manager.
+     *
+     * @param string $path
+     * @return string[]
+     */
+    protected function load_strings($path) {
+        $string = [];
+        include($path);
+        return $string;
+    }
+
+    /**
+     * The placeholders of a string, sorted.
+     *
+     * @param string $text
+     * @return string[]
+     */
+    protected function placeholders($text) {
+        preg_match_all('/\{\$a(->\w+)?\}/', $text, $matches);
+        $found = $matches[0];
+        sort($found);
+        return $found;
     }
 }

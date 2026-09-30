@@ -26,8 +26,6 @@ namespace local_resourcelinkfix;
 
 use advanced_testcase;
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * The provider loads and states that the plugin stores no personal data.
  *
