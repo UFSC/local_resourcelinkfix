@@ -33,12 +33,17 @@ namespace local_resourcelinkfix\privacy;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class provider implements \core_privacy\local\metadata\null_provider {
+    // The interface declares get_reason(): string, a return type PHP 5.6
+    // cannot parse. The core polyfill supplies get_reason() and calls
+    // _get_reason(), which can be written without it.
+    use \core_privacy\local\legacy_polyfill;
+
     /**
      * Key of the string explaining why there is no personal data.
      *
      * @return string
      */
-    public static function get_reason() {
+    public static function _get_reason() {
         return 'privacy:metadata';
     }
 }
