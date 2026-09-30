@@ -82,8 +82,10 @@ $string['errorcontentlost'] = 'Perda de conteúdo evitada em {$a->file} (cmid {$
     . ' links ({$a->oldsize} bytes antes, {$a->newsize} depois). O arquivo não foi alterado; as duas'
     . ' versões seguem no log.';
 $string['errorpcre'] = 'O motor de expressões regulares desistiu deste arquivo (erro PCRE {$a}); o arquivo não foi alterado.';
+$string['errorrewritefailed'] = 'local_resourcelinkfix: falha ao reescrever {$a->file} (cmid {$a->cmid}): {$a->error}';
 $string['logdryrun'] = 'local_resourcelinkfix [SIMULAÇÃO]: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) seriam reescritos';
 $string['logrewritten'] = 'local_resourcelinkfix: {$a->file} (cmid {$a->cmid}): {$a->links} link(s) reescrito(s)';
+$string['logtruncated'] = 'local_resourcelinkfix [{$a->label}] ... truncado em {$a->limit} de {$a->size} bytes';
 $string['pluginname'] = 'Correção de links em recursos (restore)';
 $string['privacy:metadata'] = 'O plugin não armazena dados pessoais.';
 $string['rewritejs'] = 'Reescrever também arquivos .js';
