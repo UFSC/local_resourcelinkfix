@@ -15,17 +15,32 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version details for local_resourcelinkfix.
+ * Restore logger that keeps the messages in memory.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+/**
+ * Logger that keeps the messages in memory.
+ *
+ * @package    local_resourcelinkfix
+ * @copyright  2026 UFSC
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class local_resourcelinkfix_memory_logger {
+    /** @var array[] Each entry is [message, level]. */
+    public $messages = [];
 
-$plugin->component = 'local_resourcelinkfix';
-$plugin->version   = 2026092901;
-$plugin->requires  = 2022112800; // Moodle 4.1.
-$plugin->maturity  = MATURITY_BETA;
-$plugin->release   = '0.1';
+    /**
+     * Records a message, as base_logger::process() would.
+     *
+     * @param string $message
+     * @param int $level
+     * @param array|null $options
+     */
+    public function process($message, $level, $options = null) {
+        $this->messages[] = [$message, $level];
+    }
+}
