@@ -15,40 +15,32 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Privacy provider for local_resourcelinkfix.
+ * Restore logger that keeps the messages in memory.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-namespace local_resourcelinkfix\privacy;
-
-// Only loaded on Moodle 3.4+ (Privacy API). Harmless on 3.0.
 /**
- * Privacy provider: the plugin stores no personal data.
+ * Logger that keeps the messages in memory.
  *
  * @package    local_resourcelinkfix
  * @copyright  2026 UFSC
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class provider implements \core_privacy\local\metadata\null_provider {
-    // The interface declares get_reason(): string, a return type PHP 5.6
-    // cannot parse. The core polyfill supplies get_reason() and calls
-    // _get_reason(), which can be written without it.
-    use \core_privacy\local\legacy_polyfill;
-
-    // The leading underscore is the name the core trait calls, not a visibility marker.
-    // phpcs:disable PSR2.Methods.MethodDeclaration.Underscore
+class local_resourcelinkfix_memory_logger {
+    /** @var array[] Each entry is [message, level]. */
+    public $messages = [];
 
     /**
-     * Key of the string explaining why there is no personal data.
+     * Records a message, as base_logger::process() would.
      *
-     * @return string
+     * @param string $message
+     * @param int $level
+     * @param array|null $options
      */
-    public static function _get_reason() {
-        return 'privacy:metadata';
+    public function process($message, $level, $options = null) {
+        $this->messages[] = [$message, $level];
     }
-
-    // phpcs:enable PSR2.Methods.MethodDeclaration.Underscore
 }

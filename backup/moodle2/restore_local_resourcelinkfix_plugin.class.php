@@ -160,9 +160,11 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
             } catch (Exception $e) {
                 // One problematic file must not abort the whole restore.
                 $this->task->get_logger()->process(
-                    'local_resourcelinkfix: failed to rewrite ' .
-                    $file->get_filepath() . $file->get_filename() .
-                    ' (cmid ' . $cmid . '): ' . $e->getMessage(),
+                    get_string('errorrewritefailed', 'local_resourcelinkfix', (object)[
+                        'file' => $file->get_filepath() . $file->get_filename(),
+                        'cmid' => $cmid,
+                        'error' => $e->getMessage(),
+                    ]),
                     backup::LOG_WARNING
                 );
             }
@@ -349,12 +351,11 @@ class restore_local_resourcelinkfix_plugin extends restore_local_plugin {
         }
         if ($truncated) {
             $this->task->get_logger()->process(
-                sprintf(
-                    'local_resourcelinkfix [%s] ... truncated at %d of %d bytes',
-                    $label,
-                    $limit,
-                    strlen($content)
-                ),
+                get_string('logtruncated', 'local_resourcelinkfix', (object)[
+                    'label' => $label,
+                    'limit' => $limit,
+                    'size' => strlen($content),
+                ]),
                 backup::LOG_ERROR
             );
         }
